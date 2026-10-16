@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 from tests.conftest import make_candles
-from trader.backtest import CostModel, run_backtest
+from trader.backtest import CostModel, run_backtest, run_portfolio
 from trader.risk import RiskConfig
 from trader.strategies import STRATEGIES, Strategy
 
@@ -94,3 +94,36 @@ def test_metrics_are_finite(random_walk):
         m = run_backtest(random_walk, cls()).metrics
         assert np.isfinite(m["total_return"]) and -1 <= m["max_drawdown"] <= 0
         assert 0 <= m["exposure"] <= 1
+
+
+def test_portfolio_respects_max_open_positions():
+    df = make_candles([100.0] * 5 + list(np.linspace(100, 150, 15)))
+    data = {"A": df, "B": df.copy(), "C": df.copy()}
+    risk = RiskConfig(max_open_positions=2, max_position_pct=0.3)
+    res = run_portfolio(data, Scripted(entries=(4,)), costs=NO_COSTS, risk=risk)
+    assert sorted(t.symbol for t in res.trades) == ["A", "B"]  # C ficou de fora, na ordem de data
+
+
+def test_portfolio_shares_cash():
+    df = make_candles([100.0] * 5 + list(np.linspace(100, 150, 15)))
+    data = {"A": df, "B": df.copy()}
+    res = run_portfolio(data, Scripted(entries=(4,)), costs=NO_COSTS, risk=ALL_IN)
+    assert [t.symbol for t in res.trades] == ["A"]  # A usou todo o caixa, B não tinha com o que comprar
+
+
+def test_portfolio_kill_switch_blocks_new_entries():
+    closes = [100.0] * 5 + [100.0, 40.0, 40.0] + [40.0] * 12
+    df = make_candles(closes)
+    strat = Scripted(entries=(4, 10), exits=(7,), stop_atr_mult=50.0)
+    risk = RiskConfig(risk_per_trade=1.0, max_position_pct=1.0, max_drawdown=0.2)
+    killed = run_portfolio({"A": df}, strat, costs=NO_COSTS, risk=risk)
+    free = run_portfolio({"A": df}, strat, costs=NO_COSTS, risk=risk, kill_switch=False)
+    assert len(free.trades) == 2 and len(killed.trades) == 1
+    assert killed.metrics["killed_at"] == df.index[6].isoformat()
+
+
+def test_portfolio_handles_assets_listed_later(random_walk):
+    late = random_walk.iloc[700:]
+    res = run_portfolio({"OLD": random_walk, "NEW": late}, STRATEGIES["donchian"]())
+    assert all(t.entry_time >= late.index[0] for t in res.trades if t.symbol == "NEW")
+    assert res.equity.index.is_monotonic_increasing and np.isfinite(res.metrics["total_return"])

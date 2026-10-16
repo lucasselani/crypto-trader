@@ -4,7 +4,9 @@ O "agente" é código determinístico. Ele não pergunta nada a um LLM: lê cand
 
 ## Ciclo
 
-O agente roda **uma vez por candle fechado** (no diário, por exemplo às 00:05 UTC via cron). Não precisa ficar ligado o tempo todo: no modo testnet/live o stop fica na exchange.
+O agente age **uma vez por candle fechado**, mas pode ser chamado quantas vezes quiser: execuções repetidas no mesmo candle não fazem nada. Por isso o agendamento (`deploy/systemd/`) roda de hora em hora e no boot. Se o PC estava desligado no fechamento (21:00 de Brasília no diário), o agente age assim que ligar. Na testnet e no real o stop fica na exchange, então a posição continua protegida com o PC desligado.
+
+Se o agente ficou dias sem rodar, um sinal de saída em qualquer um dos candles perdidos vale (vende). Já a entrada só acontece pelo último candle: não compra sinal velho.
 
 ```
 para cada ativo do universo (TRADER_SYMBOLS):
@@ -45,6 +47,7 @@ Com 1% de risco e stop de 3 ATR, a posição fica em torno de 10% do patrimônio
 ## Como validar (simulador)
 
 1. `trader compare` – todas as estratégias × ativos com parâmetros padrão. Visão rápida.
+   `trader portfolio` – a mesma coisa como carteira: os ativos dividem o caixa, com limite de posições e kill switch, como o agente opera de verdade.
 2. `trader backtest --strategy X --symbol Y --trades` – detalhe de uma combinação, com a lista de operações.
 3. `trader walkforward --strategy X --symbol Y` – otimiza em 2 anos, testa nos 6 meses seguintes, avança e repete. **Só o resultado fora da amostra conta.** Se os parâmetros escolhidos mudam muito de janela para janela ou o OOS é muito pior que o in-sample, a estratégia está sobreajustada.
 4. `TRADER_MODE=paper trader run` diário por algumas semanas, comparando o diário com o que o backtest faria no mesmo período.
@@ -60,7 +63,8 @@ Com 1% de risco e stop de 3 ATR, a posição fica em torno de 10% do patrimônio
 
 ## Ainda falta (próximas etapas)
 
-- Backtest de **carteira** (vários ativos dividindo o mesmo caixa, como o agente faz ao vivo); hoje o backtest é por ativo.
+- Walk-forward de **carteira** (hoje o walk-forward é por ativo; o backtest de carteira já existe).
+- Critério de aprovação de estratégia definido antes da bateria de testes.
 - Filtro de notícias/LLM gerando watchlist ou veto de regime.
-- Agendamento (cron/systemd), alertas (Telegram) e interface.
+- Alertas (Telegram) e interface.
 - Controle de imposto (vendas mensais, lucro apurado) a partir do diário.

@@ -92,3 +92,23 @@ def test_kill_switch_blocks_entries(tmp_path):
     agent.state["peak_equity"] = 20_000  # patrimônio caiu 50%
     d = agent.run_once()[0]
     assert d.action == "skip" and "kill switch" in d.reason
+
+
+def test_missed_exit_signal_still_sells(tmp_path):
+    """PC desligado: o sinal de saída apareceu numa barra que o agente não viu."""
+
+    @dataclass(frozen=True)
+    class ExitOnBar(Toggle):
+        exit_bar: int = 10
+
+        def signals(self, df):
+            x = pd.Series(False, index=df.index)
+            if len(df) > self.exit_bar:
+                x.iloc[self.exit_bar] = True
+            return pd.Series(False, index=df.index), x
+
+    agent, _ = make_agent(tmp_path, Toggle(), make_candles([100.0] * 10))
+    agent.run_once()
+    agent.candles = lambda sym: make_candles([100.0] * 13)  # 3 dias sem rodar
+    agent.strategy = ExitOnBar()
+    assert agent.run_once()[0].action == "sell"

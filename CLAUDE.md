@@ -23,6 +23,7 @@ cp .env.example .env                                         # config (paper por
 
 .venv/bin/trader fetch --since 2018-01-01                              # baixa/atualiza candles em data/
 .venv/bin/trader compare --offline                                     # estratégias × ativos
+.venv/bin/trader portfolio --offline                                   # carteira com caixa compartilhado (como o agente)
 .venv/bin/trader backtest --strategy donchian --symbol BTC/USDT --trades --param entry_n=40
 .venv/bin/trader walkforward --strategy donchian --symbol BTC/USDT --train 730 --test 180
 .venv/bin/trader run --dry-run            # decisões do agente sem executar
@@ -40,12 +41,16 @@ cp .env.example .env                                         # config (paper por
 | `indicators.py` | SMA, EMA, RSI e ATR (Wilder), Donchian |
 | `strategies/` | `Strategy` (dataclass frozen): `signals(df) -> (entry, exit)`, `warmup`, `grid` para walk-forward. Registro em `strategies/__init__.py` |
 | `risk.py` | `RiskConfig`, `position_size` (risco fixo por trade), `drawdown` |
-| `backtest.py` | Motor barra a barra por ativo, `CostModel`, métricas (CAGR, drawdown, Sharpe, Calmar, profit factor, exposição, buy & hold) |
+| `backtest.py` | `run_portfolio`: motor barra a barra multiativo com caixa compartilhado, limite de posições e kill switch, igual ao agente. `run_backtest` é o caso de um ativo sem kill switch. `CostModel` e métricas (CAGR, drawdown, Sharpe, Calmar, profit factor, exposição, buy & hold) |
 | `walkforward.py` | Otimiza na janela de treino, testa na seguinte, encadeia o OOS |
 | `broker.py` | `PaperBroker` (simulado, estado em `state/`) e `ExchangeBroker` (ccxt, testnet/live, stop `STOP_LOSS_LIMIT` na exchange) |
-| `agent.py` | `SwingAgent.run_once()`: um ciclo por candle fechado, idempotente por barra |
+| `agent.py` | `SwingAgent.run_once()`: um ciclo por candle fechado, idempotente por barra. Se ficou dias sem rodar, sai por sinal de saída em qualquer barra perdida, mas só entra pelo último candle |
 | `journal.py` | Toda decisão em `state/journal.jsonl` |
 | `cli.py` | Subcomandos `fetch`, `backtest`, `compare`, `walkforward`, `run` |
+
+## Agendamento
+
+Timer do systemd do usuário em `deploy/systemd/` (instalado em `~/.config/systemd/user/`): roda `trader run` de hora em hora e no boot, com `Persistent=true`, porque o PC costuma estar desligado no fechamento do diário (21:00 de Brasília). O modo fica fixo no `.service` (`TRADER_MODE=paper`), não no `.env`. Logs: `journalctl --user -u crypto-trader -f`. Depois de editar as units: copiar para `~/.config/systemd/user/` e `systemctl --user daemon-reload`.
 
 ## Como adicionar uma estratégia
 
@@ -61,4 +66,4 @@ cp .env.example .env                                         # config (paper por
 
 ## Estado atual e próximos passos
 
-Pré-requisitos prontos: dados, 3 estratégias de exemplo, backtest com custos, walk-forward, paper, testnet/live via ccxt, diário. Ainda **não** existe: backtest de carteira multiativo, filtro de notícias/LLM, agendamento, alertas, interface, controle de imposto. Ver `docs/agente-swing.md`.
+Pré-requisitos prontos: dados, 3 estratégias de exemplo, backtest de ativo e de carteira com custos, walk-forward (por ativo), paper agendado, execução na testnet validada em 16/10/2026 (compra, stop na exchange, mover stop, cancelar, venda), diário. Ainda **não** existe: walk-forward de carteira, critério de aprovação de estratégia, filtro de notícias/LLM, alertas, interface, controle de imposto. Imposto e exchange nacional vs. global ficaram para depois, por decisão do usuário. Ver `docs/agente-swing.md`.

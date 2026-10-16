@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 
 from trader.backtest import CostModel
 from trader.risk import RiskConfig
@@ -36,7 +36,7 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> Settings:
-        load_dotenv()
+        load_dotenv(find_dotenv(usecwd=True))
         mode = _env("TRADER_MODE", "paper")
         if mode not in MODES:
             raise ValueError(f"TRADER_MODE inválido: {mode!r} (use {', '.join(MODES)})")

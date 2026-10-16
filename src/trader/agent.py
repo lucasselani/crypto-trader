@@ -96,7 +96,9 @@ class SwingAgent:
             if not dry_run:
                 pos["last_checked"] = bar
 
-            if last["exit"]:
+            # Se o agente ficou dias sem rodar, um sinal de saída em qualquer barra perdida vale.
+            # Entrada só no último candle: não persegue sinal velho.
+            if new_bars["exit"].any():
                 if dry_run:
                     return Decision(sym, "sell", "sinal de saída", bar, float(last["close"]), pos["qty"])
                 self.broker.cancel_protection(sym, pos.get("stop_order_id"))

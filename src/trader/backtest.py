@@ -1,4 +1,5 @@
 """Backtest barra a barra, só comprado, com taxas, slippage e stop com trailing.
+Um ativo (`run_backtest`) ou uma carteira dividindo o mesmo caixa (`run_portfolio`).
 
 Ordem dos eventos em cada barra i:
 1. Na abertura, executa a ordem gerada pelo sinal do fechamento de i-1.
@@ -13,7 +14,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from trader.risk import RiskConfig, position_size
+from trader.risk import RiskConfig, drawdown, position_size
 from trader.strategies import Strategy
 
 SECONDS_PER_YEAR = 365 * 24 * 3600
@@ -35,6 +36,7 @@ class Trade:
     pnl: float
     ret: float
     reason: str
+    symbol: str = ""
 
 
 @dataclass
@@ -88,6 +90,137 @@ def compute_metrics(
     }
 
 
+@dataclass
+class _Book:
+    """Estado de um ativo durante a simulação."""
+
+    sig: pd.DataFrame
+    o: np.ndarray
+    lo: np.ndarray
+    c: np.ndarray
+    atr: np.ndarray
+    entry: np.ndarray
+    exit: np.ndarray
+    rows: np.ndarray  # linha do ativo em cada timestamp da carteira (-1 = sem candle)
+    qty: float = 0.0
+    stop: float = np.nan
+    cost_basis: float = 0.0
+    entry_px: float = 0.0
+    entry_t: pd.Timestamp | None = None
+    pending: str | None = None
+    last_close: float = np.nan
+
+
+def run_portfolio(
+    data: dict[str, pd.DataFrame],
+    strategy: Strategy,
+    *,
+    initial_cash: float = 10_000.0,
+    costs: CostModel | None = None,
+    risk: RiskConfig | None = None,
+    trade_from: pd.Timestamp | None = None,
+    kill_switch: bool = True,
+) -> BacktestResult:
+    """Simula a carteira como o agente opera: vários ativos dividindo o mesmo caixa, no máximo
+    `risk.max_open_positions` posições, tamanho pelo patrimônio total e, com `kill_switch`,
+    sem novas entradas depois de um drawdown maior que `risk.max_drawdown`.
+
+    Na abertura de cada barra executa primeiro as vendas (liberam caixa) e depois as compras,
+    na ordem de `data`. `trade_from` limita as operações (e a curva) a partir dessa data."""
+    costs = costs or CostModel()
+    risk = risk or RiskConfig()
+    index = pd.DatetimeIndex(sorted(set().union(*(df.index for df in data.values()))))
+    books: dict[str, _Book] = {}
+    for sym, df in data.items():
+        sig = strategy.generate(df)
+        books[sym] = _Book(
+            sig, *(sig[k].to_numpy(float) for k in ("open", "low", "close", "atr")),
+            sig["entry"].to_numpy(bool), sig["exit"].to_numpy(bool), sig.index.get_indexer(index),
+        )
+
+    warm = [b.sig.index[strategy.warmup] for b in books.values() if len(b.sig) > strategy.warmup]
+    trades: list[Trade] = []
+    if not warm:
+        return BacktestResult(strategy.name, strategy.params(), pd.Series(dtype=float), trades)
+    start = int(index.searchsorted(min(warm)))
+    if trade_from is not None:
+        start = max(start, int(index.searchsorted(trade_from)))
+
+    cash, peak, killed, killed_at = initial_cash, initial_cash, False, None
+    equity = np.full(len(index), np.nan)
+    bars_in = 0
+
+    def close_position(sym: str, b: _Book, t: pd.Timestamp, fill: float, reason: str) -> None:
+        nonlocal cash
+        proceeds = b.qty * fill * (1 - costs.fee_rate)
+        pnl = proceeds - b.cost_basis
+        trades.append(Trade(b.entry_t, t, b.entry_px, fill, b.qty, pnl, pnl / b.cost_basis,
+                            reason, sym))
+        cash += proceeds
+        b.qty, b.stop = 0.0, np.nan
+
+    for k in range(start, len(index)):
+        t = index[k]
+        live = [(s, b, int(b.rows[k])) for s, b in books.items() if b.rows[k] >= 0]
+
+        for s, b, r in live:
+            if b.pending == "sell" and b.qty > 0:
+                close_position(s, b, t, b.o[r] * (1 - costs.slippage), "signal")
+        equity_now = cash + sum(b.qty * b.last_close for b in books.values() if b.qty > 0)
+        for s, b, r in live:
+            if b.pending != "buy" or b.qty > 0 or killed or np.isnan(b.atr[r - 1]):
+                continue
+            if sum(1 for x in books.values() if x.qty > 0) >= risk.max_open_positions:
+                continue
+            fill = b.o[r] * (1 + costs.slippage)
+            stop_px = fill - strategy.stop_atr_mult * b.atr[r - 1]
+            q = position_size(equity_now, fill, stop_px, cash, risk, costs.fee_rate)
+            if q > 0:
+                b.cost_basis = q * fill * (1 + costs.fee_rate)
+                cash -= b.cost_basis
+                b.qty, b.stop, b.entry_px, b.entry_t = q, stop_px, fill, t
+        for _, b, _ in live:
+            b.pending = None
+
+        for s, b, r in live:
+            if b.qty > 0 and b.lo[r] <= b.stop:
+                close_position(s, b, t, min(b.o[r], b.stop) * (1 - costs.slippage), "stop")
+            if b.qty > 0:
+                b.stop = max(b.stop, b.c[r] - strategy.stop_atr_mult * b.atr[r])
+            b.last_close = b.c[r]
+
+        if any(b.qty > 0 for b in books.values()):
+            bars_in += 1
+        equity[k] = cash + sum(b.qty * b.last_close for b in books.values() if b.qty > 0)
+        peak = max(peak, equity[k])
+        if kill_switch and not killed and drawdown(equity[k], peak) > risk.max_drawdown:
+            killed, killed_at = True, t
+
+        for _, b, r in live:
+            if b.qty > 0 and b.exit[r]:
+                b.pending = "sell"
+            elif b.qty == 0 and b.entry[r]:
+                b.pending = "buy"
+
+    for s, b in books.items():
+        if b.qty > 0:
+            close_position(s, b, index[-1], b.last_close * (1 - costs.slippage), "end")
+    equity[-1] = cash
+
+    eq = pd.Series(equity, index).dropna()
+    bench = pd.concat({s: b.sig["close"] for s, b in books.items()}, axis=1).reindex(index).ffill()
+    result = BacktestResult(strategy.name, strategy.params(), eq, trades)
+    result.metrics = compute_metrics(eq, trades, bars_in / max(1, len(index) - start),
+                                     bench.iloc[:, 0])
+    if len(books) > 1:
+        # buy & hold de referência: carteira igualmente dividida entre os ativos
+        rel = bench.loc[eq.index].bfill()
+        result.metrics["buy_hold"] = float((rel.iloc[-1] / rel.iloc[0]).mean() - 1)
+    if kill_switch:
+        result.metrics["killed_at"] = killed_at.isoformat() if killed_at is not None else None
+    return result
+
+
 def run_backtest(
     df: pd.DataFrame,
     strategy: Strategy,
@@ -97,69 +230,7 @@ def run_backtest(
     risk: RiskConfig | None = None,
     trade_from: pd.Timestamp | None = None,
 ) -> BacktestResult:
-    """Roda a estratégia em um ativo. `trade_from` limita as operações (e a curva) a partir dessa data,
-    usando as barras anteriores só como aquecimento dos indicadores."""
-    costs = costs or CostModel()
-    risk = risk or RiskConfig()
-    sig = strategy.generate(df)
-    idx = sig.index
-    o, lo, c = (sig[k].to_numpy(float) for k in ("open", "low", "close"))
-    atr_ = sig["atr"].to_numpy(float)
-    entry, exit_ = sig["entry"].to_numpy(bool), sig["exit"].to_numpy(bool)
-    n = len(sig)
-
-    start = strategy.warmup
-    if trade_from is not None:
-        start = max(start, int(idx.searchsorted(trade_from)))
-    equity = np.full(n, np.nan)
-    trades: list[Trade] = []
-    if start >= n:
-        return BacktestResult(strategy.name, strategy.params(), pd.Series(equity, idx).dropna(), [])
-
-    cash, qty, stop, cost_basis = initial_cash, 0.0, np.nan, 0.0
-    entry_px, entry_t = 0.0, idx[start]
-    pending: str | None = None
-    bars_in = 0
-
-    def close_position(i: int, fill: float, reason: str) -> None:
-        nonlocal cash, qty, stop
-        proceeds = qty * fill * (1 - costs.fee_rate)
-        pnl = proceeds - cost_basis
-        trades.append(Trade(entry_t, idx[i], entry_px, fill, qty, pnl, pnl / cost_basis, reason))
-        cash += proceeds
-        qty, stop = 0.0, np.nan
-
-    for i in range(start, n):
-        if pending == "sell" and qty > 0:
-            close_position(i, o[i] * (1 - costs.slippage), "signal")
-        elif pending == "buy" and qty == 0 and not np.isnan(atr_[i - 1]):
-            fill = o[i] * (1 + costs.slippage)
-            stop_px = fill - strategy.stop_atr_mult * atr_[i - 1]
-            q = position_size(cash, fill, stop_px, cash, risk, costs.fee_rate)
-            if q > 0:
-                cost_basis = q * fill * (1 + costs.fee_rate)
-                cash -= cost_basis
-                qty, stop, entry_px, entry_t = q, stop_px, fill, idx[i]
-        pending = None
-
-        if qty > 0 and lo[i] <= stop:
-            close_position(i, min(o[i], stop) * (1 - costs.slippage), "stop")
-
-        if qty > 0:
-            bars_in += 1
-            stop = max(stop, c[i] - strategy.stop_atr_mult * atr_[i])
-        equity[i] = cash + qty * c[i]
-
-        if qty > 0 and exit_[i]:
-            pending = "sell"
-        elif qty == 0 and entry[i]:
-            pending = "buy"
-
-    if qty > 0:
-        close_position(n - 1, c[-1] * (1 - costs.slippage), "end")
-        equity[n - 1] = cash
-
-    eq = pd.Series(equity, idx).dropna()
-    result = BacktestResult(strategy.name, strategy.params(), eq, trades)
-    result.metrics = compute_metrics(eq, trades, bars_in / max(1, n - start), sig["close"])
-    return result
+    """Backtest de um único ativo (sem kill switch). `trade_from` limita as operações (e a curva)
+    a partir dessa data, usando as barras anteriores só como aquecimento dos indicadores."""
+    return run_portfolio({"": df}, strategy, initial_cash=initial_cash, costs=costs, risk=risk,
+                         trade_from=trade_from, kill_switch=False)

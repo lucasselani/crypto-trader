@@ -1,0 +1,12 @@
+[Unit]
+Description=crypto-trader: um ciclo do agente de swing
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Projects/crypto-trader
+# Modo fixado aqui de propósito: mudar o .env não troca o modo do agendamento sem querer.
+# Para testnet, troque para TRADER_MODE=testnet. Live nunca deve ser agendado sem revisão.
+Environment=TRADER_MODE=paper
+ExecStart=%h/Projects/crypto-trader/.venv/bin/trader run

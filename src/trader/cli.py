@@ -1,4 +1,4 @@
-"""CLI: `trader fetch | backtest | compare | walkforward | run`."""
+"""CLI: `trader fetch | backtest | compare | portfolio | walkforward | run`."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import sys
 
 import pandas as pd
 
-from trader.backtest import run_backtest
+from trader.backtest import run_backtest, run_portfolio
 from trader.config import Settings
 from trader.data import load_candles, make_exchange
 from trader.strategies import STRATEGIES, get_strategy
@@ -64,6 +64,23 @@ def cmd_compare(s: Settings, a: argparse.Namespace) -> None:
     cols = ["symbol", "strategy", "total_return", "cagr", "max_drawdown", "sharpe", "trades",
             "win_rate", "profit_factor", "exposure", "buy_hold"]
     print(pd.DataFrame(rows)[cols].to_string(index=False))
+
+
+def cmd_portfolio(s: Settings, a: argparse.Namespace) -> None:
+    symbols = a.symbols or s.symbols
+    data = {sym: _candles(s, sym, a.since, refresh=not a.offline) for sym in symbols}
+    names = [a.strategy] if a.strategy else list(STRATEGIES)
+    rows = []
+    for name in names:
+        strat = get_strategy(name, **(parse_params(a.param) if a.strategy else {}))
+        res = run_portfolio(data, strat, initial_cash=a.cash, costs=s.costs, risk=s.risk,
+                            kill_switch=not a.no_kill_switch)
+        rows.append({"strategy": name, **fmt_metrics(res.metrics)})
+        if a.trades and res.trades:
+            print(f"\n{name}:")
+            print(res.trades_frame().to_string(index=False))
+    print(f"\nCarteira {', '.join(symbols)} ({s.timeframe}), até {s.risk.max_open_positions} posições:")
+    print(pd.DataFrame(rows).to_string(index=False))
 
 
 def cmd_walkforward(s: Settings, a: argparse.Namespace) -> None:
@@ -129,6 +146,15 @@ def main(argv: list[str] | None = None) -> None:
     c.add_argument("--symbols", nargs="*")
     common(c)
 
+    pf = sub.add_parser("portfolio", help="carteira multiativo com caixa compartilhado, como o agente")
+    pf.add_argument("--strategy", choices=list(STRATEGIES), help="padrão: todas")
+    pf.add_argument("--symbols", nargs="*")
+    pf.add_argument("--param", nargs="*", default=[], help="só com --strategy")
+    pf.add_argument("--cash", type=float, default=10_000.0)
+    pf.add_argument("--no-kill-switch", action="store_true")
+    pf.add_argument("--trades", action="store_true")
+    common(pf)
+
     w = sub.add_parser("walkforward", help="otimiza e testa fora da amostra em janelas")
     w.add_argument("--strategy", required=True, choices=list(STRATEGIES))
     w.add_argument("--symbol", default="BTC/USDT")
@@ -146,7 +172,7 @@ def main(argv: list[str] | None = None) -> None:
     s = Settings.from_env()
     if a.timeframe:
         s.timeframe = a.timeframe
-    {"fetch": cmd_fetch, "backtest": cmd_backtest, "compare": cmd_compare,
+    {"fetch": cmd_fetch, "backtest": cmd_backtest, "compare": cmd_compare, "portfolio": cmd_portfolio,
      "walkforward": cmd_walkforward, "run": cmd_run}[a.cmd](s, a)
 
 

@@ -1,0 +1,12 @@
+[Unit]
+Description=crypto-trader: roda o agente de hora em hora enquanto o PC estiver ligado
+
+[Timer]
+# O agente é idempotente por candle: só a primeira execução depois do fechamento do diário
+# (21:00 de Brasília) age; as outras registram "barra já processada".
+OnBootSec=5min
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target

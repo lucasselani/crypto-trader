@@ -43,6 +43,8 @@ cp .env.example .env            # modo paper por padrão, sem chave
 1. ~~Escolher a exchange e a API~~: Binance + `ccxt` (ver [docs/exchange-e-api.md](docs/exchange-e-api.md)).
 2. ~~Coletor de dados com `ccxt`~~: `trader fetch`, cache em `data/`.
 3. ~~Backtester com custos reais e walk-forward~~: `trader backtest` / `trader walkforward`.
-4. Rodar muito simulador: walk-forward em vários ativos e timeframes, backtest de carteira multiativo.
-5. Semanas de paper (`TRADER_MODE=paper`) e depois testnet antes de qualquer real.
-6. Operação: agendamento, alertas, interface, filtro de notícias e controle de imposto.
+4. ~~Backtest de carteira multiativo~~: `trader portfolio`.
+5. ~~Paper agendado~~ (`deploy/systemd/`) e ~~execução validada na testnet~~.
+6. Rodar muito simulador: critério de aprovação, walk-forward de carteira, vários ativos e timeframes.
+7. Semanas de paper e depois testnet antes de qualquer real.
+8. Operação: alertas, interface, filtro de notícias e controle de imposto.
