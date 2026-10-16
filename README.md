@@ -1,6 +1,6 @@
 # crypto-trader
 
-Notas de pesquisa para um dia montar agentes de trading (cripto primeiro, B3 depois). Ainda não tem código: este repositório guarda o que foi levantado em 16/10/2026 para retomar o assunto sem começar do zero.
+Agente de swing trade de cripto (B3 depois) e as notas de pesquisa que o originaram (16/10/2026). A parte básica já roda: dados via `ccxt`, estratégias determinísticas, backtest com custos, walk-forward, simulador local, testnet e execução real na Binance.
 
 > Nada aqui é recomendação de investimento. São anotações técnicas e de pesquisa. Regras de imposto mudam: confirme com um contador antes de operar com dinheiro real.
 
@@ -13,11 +13,24 @@ Notas de pesquisa para um dia montar agentes de trading (cripto primeiro, B3 dep
 - **Swing é mais viável que day trade** para um dev sozinho: latência importa pouco, dá para revisar antes de executar e na B3 existe a isenção de R$ 20 mil/mês em vendas de ações.
 - **Nenhuma ferramenta pronta da lista resolve.** AutoHedge é só Solana; Fincept é a mais próxima (notícias + agentes + paper trading), mas com foco global.
 
+## Começando
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
+cp .env.example .env            # modo paper por padrão, sem chave
+.venv/bin/trader fetch          # baixa candles diários desde 2018
+.venv/bin/trader compare        # estratégias × ativos
+.venv/bin/trader walkforward --strategy donchian --symbol BTC/USDT
+.venv/bin/trader run --dry-run  # o que o agente faria hoje
+```
+
 ## Documentos
 
 | Arquivo | Conteúdo |
 |---|---|
 | [docs/ferramentas.md](docs/ferramentas.md) | Avaliação das ferramentas de trading e das que ajudam no pipeline (dados, notícias, scraping, engenharia) |
+| [docs/exchange-e-api.md](docs/exchange-e-api.md) | Onde abrir conta, qual API usar, testnet e chaves |
+| [docs/agente-swing.md](docs/agente-swing.md) | Como o agente decide comprar e vender, risco e roteiro de validação |
 | [docs/arquitetura.md](docs/arquitetura.md) | Arquitetura proposta: coleta → filtro → estratégia → backtest → simulação → execução |
 | [docs/filtro-noticias.md](docs/filtro-noticias.md) | Como montar a triagem de notícias e a watchlist pré-pregão |
 | [docs/simulacao-backtest.md](docs/simulacao-backtest.md) | Backtest, replay, simulador e onde cada um "mente" |
@@ -25,10 +38,11 @@ Notas de pesquisa para um dia montar agentes de trading (cripto primeiro, B3 dep
 | [docs/b3.md](docs/b3.md) | Ações e futuros na B3: MetaTrader 5, Profit, impostos de day trade e swing |
 | [docs/referencias/ferramentas-instagram.md](docs/referencias/ferramentas-instagram.md) | Lista original de ferramentas coletada dos posts do Instagram |
 
-## Próximos passos (quando voltar)
+## Próximos passos
 
-1. Escolher a exchange (brasileira para aproveitar a isenção, ou estrangeira pela liquidez) e criar a chave de testnet.
-2. Coletor de dados com `ccxt` salvando candles e trades em arquivos/banco.
-3. Primeiro protótipo do filtro de notícias gerando uma watchlist diária (sem executar nada).
-4. Backtester com custos reais (taxas, slippage) e walk-forward.
-5. Semanas de paper trading/testnet antes de qualquer real.
+1. ~~Escolher a exchange e a API~~: Binance + `ccxt` (ver [docs/exchange-e-api.md](docs/exchange-e-api.md)).
+2. ~~Coletor de dados com `ccxt`~~: `trader fetch`, cache em `data/`.
+3. ~~Backtester com custos reais e walk-forward~~: `trader backtest` / `trader walkforward`.
+4. Rodar muito simulador: walk-forward em vários ativos e timeframes, backtest de carteira multiativo.
+5. Semanas de paper (`TRADER_MODE=paper`) e depois testnet antes de qualquer real.
+6. Operação: agendamento, alertas, interface, filtro de notícias e controle de imposto.
