@@ -1,4 +1,4 @@
-"""CLI: `trader fetch | backtest | compare | portfolio | walkforward | run`."""
+"""CLI: `trader fetch | backtest | compare | portfolio | walkforward | battery | run`."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from trader.backtest import run_backtest, run_portfolio
 from trader.config import Settings
 from trader.data import load_candles, make_exchange
 from trader.strategies import STRATEGIES, get_strategy
-from trader.walkforward import walk_forward
+from trader.walkforward import evaluate, walk_forward
 
 PCT = ("total_return", "cagr", "max_drawdown", "win_rate", "avg_trade", "exposure", "buy_hold")
 
@@ -32,9 +32,21 @@ def fmt_metrics(m: dict) -> dict:
                 round(v, 2) if isinstance(v, float) else v) for k, v in m.items()}
 
 
-def _candles(s: Settings, symbol: str, since: str, refresh: bool) -> pd.DataFrame:
-    return load_candles(symbol, s.timeframe, since, exchange_id=s.exchange,
+def _candles(s: Settings, symbol: str, since: str, refresh: bool,
+             timeframe: str | None = None) -> pd.DataFrame:
+    return load_candles(symbol, timeframe or s.timeframe, since, exchange_id=s.exchange,
                         data_dir=s.data_dir, refresh=refresh)
+
+
+def bars_per_day(timeframe: str) -> float:
+    return 86400 / make_exchange("binance").parse_timeframe(timeframe)
+
+
+def _walk(s: Settings, data: dict, strategy: str, timeframe: str, a: argparse.Namespace):
+    bpd = bars_per_day(timeframe)
+    return walk_forward(data, get_strategy(strategy), train_bars=int(a.train_days * bpd),
+                        test_bars=int(a.test_days * bpd), objective=a.objective,
+                        costs=s.costs, risk=s.risk)
 
 
 def cmd_fetch(s: Settings, a: argparse.Namespace) -> None:
@@ -84,14 +96,53 @@ def cmd_portfolio(s: Settings, a: argparse.Namespace) -> None:
 
 
 def cmd_walkforward(s: Settings, a: argparse.Namespace) -> None:
-    df = _candles(s, a.symbol, a.since, refresh=not a.offline)
-    res = walk_forward(df, get_strategy(a.strategy), train_bars=a.train, test_bars=a.test,
-                       objective=a.objective, costs=s.costs, risk=s.risk)
+    symbols = a.symbols or s.symbols
+    data = {sym: _candles(s, sym, a.since, refresh=not a.offline) for sym in symbols}
+    res = _walk(s, data, a.strategy, s.timeframe, a)
     print(res.windows_frame().to_string(index=False))
-    print(f"\nFora da amostra ({a.symbol} {s.timeframe} {a.strategy}):")
+    print(f"\nFora da amostra ({', '.join(symbols)} {s.timeframe} {a.strategy}):")
     for k, v in fmt_metrics(res.metrics).items():
         if k != "exposure":
             print(f"  {k:>14}: {v}")
+    checks = evaluate(res)
+    print("\nCritérios:", "  ".join(f"{k}={'ok' if v else 'falhou'}" for k, v in checks.items()))
+
+
+def cmd_battery(s: Settings, a: argparse.Namespace) -> None:
+    import ccxt
+
+    symbols = a.symbols or s.universe
+    rows = []
+    for tf in a.timeframes:
+        data = {}
+        for sym in symbols:
+            try:
+                data[sym] = _candles(s, sym, a.since, refresh=not a.offline, timeframe=tf)
+            except (ccxt.BaseError, FileNotFoundError) as e:  # sem dados nessa exchange/timeframe
+                print(f"  pulando {sym} {tf}: {e}", file=sys.stderr)
+        for name in a.strategies or list(STRATEGIES):
+            print(f"... {tf} {name}", file=sys.stderr, flush=True)
+            res = _walk(s, data, name, tf, a)
+            checks = evaluate(res)
+            m = res.metrics
+            rows.append({
+                "timeframe": tf, "strategy": name,
+                **{k: m.get(k) for k in ("total_return", "cagr", "max_drawdown", "calmar",
+                                         "sharpe", "profit_factor", "trades", "buy_hold")},
+                **{f"ok_{k}": v for k, v in checks.items()},
+            })
+    df = pd.DataFrame(rows)
+    out = s.data_dir / "results" / f"battery_{pd.Timestamp.now(tz='UTC'):%Y%m%d_%H%M%S}.csv"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(out, index=False)
+    show = df.copy()
+    for col in ("total_return", "cagr", "max_drawdown", "buy_hold"):
+        show[col] = show[col].map(lambda v: f"{v:.1%}" if pd.notna(v) else "")
+    for col in ("calmar", "sharpe", "profit_factor"):
+        show[col] = show[col].map(lambda v: f"{v:.2f}" if pd.notna(v) else "")
+    print(f"Universo: {', '.join(data)}\n")
+    print(show.to_string(index=False))
+    print(f"\nSalvo em {out}")
 
 
 def cmd_run(s: Settings, a: argparse.Namespace) -> None:
@@ -155,13 +206,22 @@ def main(argv: list[str] | None = None) -> None:
     pf.add_argument("--trades", action="store_true")
     common(pf)
 
-    w = sub.add_parser("walkforward", help="otimiza e testa fora da amostra em janelas")
+    def wf_args(sp: argparse.ArgumentParser) -> None:
+        sp.add_argument("--symbols", nargs="*")
+        sp.add_argument("--train-days", type=float, default=730, help="dias de otimização por janela")
+        sp.add_argument("--test-days", type=float, default=180, help="dias de teste por janela")
+        sp.add_argument("--objective", default="calmar",
+                        choices=["calmar", "sharpe", "total_return"])
+        common(sp)
+
+    w = sub.add_parser("walkforward", help="otimiza e testa fora da amostra, em carteira")
     w.add_argument("--strategy", required=True, choices=list(STRATEGIES))
-    w.add_argument("--symbol", default="BTC/USDT")
-    w.add_argument("--train", type=int, default=730, help="barras de otimização por janela")
-    w.add_argument("--test", type=int, default=180, help="barras de teste por janela")
-    w.add_argument("--objective", default="calmar", choices=["calmar", "sharpe", "total_return"])
-    common(w)
+    wf_args(w)
+
+    bt = sub.add_parser("battery", help="walk-forward de todas as estratégias × timeframes")
+    bt.add_argument("--timeframes", nargs="*", default=["1d", "4h"])
+    bt.add_argument("--strategies", nargs="*", choices=list(STRATEGIES))
+    wf_args(bt)
 
     r = sub.add_parser("run", help="executa o agente uma vez (paper/testnet/live conforme .env)")
     r.add_argument("--strategy", choices=list(STRATEGIES))
@@ -173,7 +233,7 @@ def main(argv: list[str] | None = None) -> None:
     if a.timeframe:
         s.timeframe = a.timeframe
     {"fetch": cmd_fetch, "backtest": cmd_backtest, "compare": cmd_compare, "portfolio": cmd_portfolio,
-     "walkforward": cmd_walkforward, "run": cmd_run}[a.cmd](s, a)
+     "walkforward": cmd_walkforward, "battery": cmd_battery, "run": cmd_run}[a.cmd](s, a)
 
 
 if __name__ == "__main__":

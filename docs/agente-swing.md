@@ -49,10 +49,30 @@ Com 1% de risco e stop de 3 ATR, a posição fica em torno de 10% do patrimônio
 1. `trader compare` – todas as estratégias × ativos com parâmetros padrão. Visão rápida.
    `trader portfolio` – a mesma coisa como carteira: os ativos dividem o caixa, com limite de posições e kill switch, como o agente opera de verdade.
 2. `trader backtest --strategy X --symbol Y --trades` – detalhe de uma combinação, com a lista de operações.
-3. `trader walkforward --strategy X --symbol Y` – otimiza em 2 anos, testa nos 6 meses seguintes, avança e repete. **Só o resultado fora da amostra conta.** Se os parâmetros escolhidos mudam muito de janela para janela ou o OOS é muito pior que o in-sample, a estratégia está sobreajustada.
-4. `TRADER_MODE=paper trader run` diário por algumas semanas, comparando o diário com o que o backtest faria no mesmo período.
-5. Testnet por algumas semanas para validar a execução real (precisão, taxas, stops).
-6. Só então live, com pouco dinheiro.
+3. `trader walkforward --strategy X` – otimiza em 2 anos, testa nos 6 meses seguintes, avança e repete (ver abaixo). **Só o resultado fora da amostra conta.**
+4. `trader battery` – walk-forward de todas as estratégias, em diário e 4h, numa carteira com 10 moedas líquidas. Mostra quais passam nos critérios e salva um CSV em `data/results/`.
+5. `TRADER_MODE=paper trader run` diário por algumas semanas, comparando o diário com o que o backtest faria no mesmo período.
+6. Testnet por algumas semanas para validar a execução real (precisão, taxas, stops).
+7. Só então live, com pouco dinheiro.
+
+### Walk-forward em uma frase
+
+Escolher os parâmetros olhando o período inteiro é fazer a prova com o gabarito. O walk-forward escolhe com 2 anos de passado, testa nos 6 meses seguintes que a escolha não viu, anda 6 meses e repete. A curva final só tem esses semestres "não vistos".
+
+### Critérios de aprovação (régua inicial, ajustar com dados)
+
+Medidos só fora da amostra (`Criteria` em `walkforward.py`):
+
+| Critério | Mínimo | O que significa |
+|---|---|---|
+| Calmar | 1,0 | Ganho por ano ÷ pior queda. 1,0 = em um ano ganha o tamanho da pior queda (ex.: +10%/ano com queda máxima de 10%) |
+| Profit factor | 1,3 | Soma dos ganhos ÷ soma das perdas. 1,3 = R$ 1,30 ganho para cada R$ 1,00 perdido |
+| Operações | 30 | Com menos, o resultado pode ser sorte |
+| Janelas positivas | 50% | Das janelas de 6 meses em que operou, pelo menos metade terminou no lucro (não depende de um ano mágico) |
+
+### Viés de sobrevivência
+
+O universo da bateria são moedas que existem e são grandes hoje. Moedas que morreram no caminho não estão lá, então o passado parece melhor do que foi. Por isso o paper e a testnet continuam obrigatórios.
 
 ## Regras do backtest (para não mentir)
 
@@ -63,8 +83,6 @@ Com 1% de risco e stop de 3 ATR, a posição fica em torno de 10% do patrimônio
 
 ## Ainda falta (próximas etapas)
 
-- Walk-forward de **carteira** (hoje o walk-forward é por ativo; o backtest de carteira já existe).
-- Critério de aprovação de estratégia definido antes da bateria de testes.
 - Filtro de notícias/LLM gerando watchlist ou veto de regime.
 - Alertas (Telegram) e interface.
 - Controle de imposto (vendas mensais, lucro apurado) a partir do diário.

@@ -12,6 +12,10 @@ from trader.backtest import CostModel
 from trader.risk import RiskConfig
 
 MODES = ("paper", "testnet", "live")
+# Universo da bateria de simulações: moedas líquidas da Binance em USDT.
+# Viés de sobrevivência: são as que existem hoje, o passado delas parece melhor do que foi.
+UNIVERSE = ("BTC/USDT,ETH/USDT,SOL/USDT,BNB/USDT,XRP/USDT,ADA/USDT,DOGE/USDT,AVAX/USDT,"
+            "LINK/USDT,LTC/USDT")
 
 
 def _env(name: str, default: str) -> str:
@@ -25,8 +29,9 @@ class Settings:
     allow_live: bool = False
     api_key: str | None = None
     api_secret: str | None = None
-    symbols: list[str] = field(default_factory=lambda: ["BTC/USDT", "ETH/USDT", "SOL/USDT"])
+    symbols: list[str] = field(default_factory=lambda: UNIVERSE.split(","))
     timeframe: str = "1d"
+    universe: list[str] = field(default_factory=lambda: UNIVERSE.split(","))
     strategy: str = "donchian"
     risk: RiskConfig = field(default_factory=RiskConfig)
     costs: CostModel = field(default_factory=CostModel)
@@ -46,8 +51,9 @@ class Settings:
             allow_live=_env("TRADER_ALLOW_LIVE", "no").lower() == "yes",
             api_key=_env("TRADER_API_KEY", "") or None,
             api_secret=_env("TRADER_API_SECRET", "") or None,
-            symbols=[s.strip() for s in _env("TRADER_SYMBOLS", "BTC/USDT,ETH/USDT,SOL/USDT").split(",") if s.strip()],
+            symbols=[s.strip() for s in _env("TRADER_SYMBOLS", UNIVERSE).split(",") if s.strip()],
             timeframe=_env("TRADER_TIMEFRAME", "1d"),
+            universe=[s.strip() for s in _env("TRADER_UNIVERSE", UNIVERSE).split(",") if s.strip()],
             strategy=_env("TRADER_STRATEGY", "donchian"),
             risk=RiskConfig(
                 risk_per_trade=float(_env("TRADER_RISK_PER_TRADE", "0.01")),
