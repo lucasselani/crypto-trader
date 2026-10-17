@@ -122,6 +122,47 @@
       },
       "risk_per_trade": 0.01,
       "max_open_positions": 3
+    },
+    {
+      "name": "ema_cross_4h_funding",
+      "strategy": "ema_cross",
+      "timeframe": "4h",
+      "params": {
+        "fast": 20,
+        "slow": 100,
+        "regime": 200,
+        "stop_atr_mult": 4.0,
+        "max_funding": 0.0005
+      },
+      "risk_per_trade": 0.01,
+      "max_open_positions": 3
+    },
+    {
+      "name": "donchian_1d_funding",
+      "strategy": "donchian",
+      "timeframe": "1d",
+      "params": {
+        "entry_n": 20,
+        "exit_n": 20,
+        "regime": 200,
+        "stop_atr_mult": 2.0,
+        "max_funding": 0.0005
+      },
+      "risk_per_trade": 0.01,
+      "max_open_positions": 3
+    },
+    {
+      "name": "keltner_1d_funding",
+      "strategy": "keltner",
+      "timeframe": "1d",
+      "params": {
+        "n": 50,
+        "k": 1.5,
+        "stop_atr_mult": 2.0,
+        "max_funding": 0.0005
+      },
+      "risk_per_trade": 0.01,
+      "max_open_positions": 3
     }
   ]
 }

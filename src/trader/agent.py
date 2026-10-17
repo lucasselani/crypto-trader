@@ -20,7 +20,7 @@ import pandas as pd
 from trader import journal
 from trader.broker import Broker
 from trader.config import Settings
-from trader.data import load_candles
+from trader.data import load_candles, with_funding
 from trader.journal import Decision
 from trader.risk import drawdown, position_size
 from trader.strategies import Strategy
@@ -49,8 +49,11 @@ class SwingAgent:
     def candles(self, symbol: str) -> pd.DataFrame:
         tf_s = self.market.parse_timeframe(self.s.timeframe)
         since = pd.Timestamp.now(tz="UTC") - pd.Timedelta(seconds=tf_s * self.strategy.warmup * 3)
-        return load_candles(symbol, self.s.timeframe, since, exchange_id=self.s.exchange,
-                            data_dir=self.s.data_dir, ex=self.market)
+        df = load_candles(symbol, self.s.timeframe, since, exchange_id=self.s.exchange,
+                          data_dir=self.s.data_dir, ex=self.market)
+        if self.strategy.max_funding is not None:
+            df = with_funding(df, symbol, tf_s, data_dir=self.s.data_dir)
+        return df
 
     def run_once(self, dry_run: bool = False) -> list[Decision]:
         frames = {sym: self.strategy.generate(self.candles(sym)) for sym in self.s.symbols}

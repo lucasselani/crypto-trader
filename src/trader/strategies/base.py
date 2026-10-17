@@ -21,6 +21,9 @@ from trader.indicators import atr
 class Strategy(ABC):
     stop_atr_mult: float = 3.0
     atr_period: int = 14
+    # Filtro de euforia: não entra se a média recente do funding (coluna `funding`, ver
+    # data.attach_funding) passar deste valor. None desliga; sem dado de funding, não bloqueia.
+    max_funding: float | None = None
 
     name: ClassVar[str] = ""
     # Grade de parâmetros usada no walk-forward
@@ -39,6 +42,8 @@ class Strategy(ABC):
         out = df.copy()
         out["atr"] = atr(df, self.atr_period)
         entry, exit_ = self.signals(df)
+        if self.max_funding is not None and "funding" in df:
+            entry = entry & ~(df["funding"] > self.max_funding)
         out["entry"] = entry.fillna(False).astype(bool)
         out["exit"] = exit_.fillna(False).astype(bool)
         warm = min(self.warmup, len(out))

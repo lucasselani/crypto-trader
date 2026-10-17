@@ -13,7 +13,7 @@ import pandas as pd
 
 from trader.backtest import run_backtest, run_portfolio
 from trader.config import Settings
-from trader.data import load_candles, make_exchange
+from trader.data import load_candles, make_exchange, with_funding
 from trader.risk import RiskConfig
 from trader.strategies import STRATEGIES, get_strategy
 from trader.walkforward import evaluate, optimize, param_grid, walk_forward
@@ -57,6 +57,18 @@ def cmd_fetch(s: Settings, a: argparse.Namespace) -> None:
     for sym in a.symbols or s.symbols:
         df = _candles(s, sym, a.since, refresh=True)
         print(f"{sym} {s.timeframe}: {len(df)} candles, {df.index[0].date()} → {df.index[-1].date()}")
+
+
+def cmd_fetch_funding(s: Settings, a: argparse.Namespace) -> None:
+    from trader.data import load_funding
+
+    for sym in a.symbols or s.universe:
+        f = load_funding(sym, a.since, data_dir=s.data_dir)
+        if f.empty:
+            print(f"{sym}: sem perpétuo/funding")
+        else:
+            print(f"{sym}: {len(f)} pagamentos, {f.index[0].date()} → {f.index[-1].date()}, "
+                  f"média {f.mean():.4%} por 8h")
 
 
 def cmd_backtest(s: Settings, a: argparse.Namespace) -> None:
@@ -228,6 +240,10 @@ def cmd_forward(s: Settings, a: argparse.Namespace) -> None:
         bpd = bars_per_day(acc.timeframe)
         since = book.frozen_ts - pd.Timedelta(days=strat.warmup / bpd * 2 + 5)
         data = _universe_data(s, acc.timeframe, since, refresh=not a.offline)
+        if strat.max_funding is not None:
+            secs = int(86400 / bpd)
+            data = {sym: with_funding(df, sym, secs, data_dir=s.data_dir, refresh=not a.offline)
+                    for sym, df in data.items()}
         cfg = acc.settings(s)
         res = run_portfolio(data, strat, costs=s.costs, risk=cfg.risk, trade_from=book.frozen_ts)
         m = res.metrics
@@ -339,6 +355,10 @@ def main(argv: list[str] | None = None) -> None:
     f.add_argument("--symbols", nargs="*")
     f.add_argument("--since", default="2018-01-01")
 
+    ff = sub.add_parser("fetch-funding", help="baixa/atualiza o histórico de funding dos perpétuos")
+    ff.add_argument("--symbols", nargs="*")
+    ff.add_argument("--since", default="2019-01-01")
+
     def common(sp: argparse.ArgumentParser) -> None:
         sp.add_argument("--since", default="2018-01-01")
         sp.add_argument("--offline", action="store_true", help="usa só o cache, sem rede")
@@ -417,7 +437,7 @@ def main(argv: list[str] | None = None) -> None:
     s = Settings.from_env()
     if a.timeframe:
         s.timeframe = a.timeframe
-    {"fetch": cmd_fetch, "backtest": cmd_backtest, "compare": cmd_compare, "portfolio": cmd_portfolio,
+    {"fetch": cmd_fetch, "fetch-funding": cmd_fetch_funding, "backtest": cmd_backtest, "compare": cmd_compare, "portfolio": cmd_portfolio,
      "walkforward": cmd_walkforward, "battery": cmd_battery, "run": cmd_run,
      "freeze": cmd_freeze, "status": cmd_status, "forward": cmd_forward,
      "regimes": cmd_regimes}[a.cmd](s, a)

@@ -139,3 +139,29 @@ Leituras:
 - **Não ajuda no mercado lateral**, ao contrário do que se esperava: perde nessa fase (−0,6% a −3,7%/mês), porque troca de moeda atrás de altas que não continuam.
 - A high52w é a melhor das duas; a 50% ficou parecida com o hold de BTC em ganho com uma queda menor (−47% vs −77%), mas ainda grande demais.
 - Decisão: não vira conta de paper por enquanto (o agente também não opera rotação ainda). Critério novo: **pior queda de no máximo −30%** (a high52w 100% passava nos outros critérios com −71%). Com ele, das variações de 17/10, saem também ema_cross 4h 2%/3 e 2%/5 e donchian diário 2%/5 e 1%/5 (quedas de −25% a −45%).
+
+## 17/10/2026 – filtro de euforia pelo funding (ideia do Vibe-Trading)
+
+Não abre compra se a média do funding do perpétuo da moeda nos últimos 7 dias (21 pagamentos, conhecidos no fechamento do candle) passar do limite. Saídas não mudam. Referência: a média de 7 dias fica acima de 0,03%/8h em ~10% do tempo e acima de 0,05%/8h em ~5%. O nível "normal" da Binance é 0,01%/8h.
+
+| | Filtro | Mês 2020–26 | Mês desde 2024 | Pior queda | Calmar | Operações |
+|---|---|---|---|---|---|---|
+| ema_cross 4h | sem | +1,87% | +1,45% | −24% | 1,06 | 514 |
+| ema_cross 4h | 0,02% | +2,11% | +1,44% | −24% | 1,19 | 473 |
+| ema_cross 4h | 0,03% | +2,43% | +1,50% | −26% | 1,29 | 490 |
+| ema_cross 4h | **0,05%** | **+2,46%** | +1,45% | −22% | **1,54** | 502 |
+| donchian diário | sem | +1,29% | +0,06% | −12% | 1,38 | 149 |
+| donchian diário | 0,02% | +1,26% | +0,15% | −17% | 0,93 | 127 |
+| donchian diário | 0,03% | +1,33% | +0,08% | −12% | 1,42 | 141 |
+| donchian diário | **0,05%** | +1,44% | +0,12% | −12% | 1,55 | 146 |
+| keltner diário | sem | +1,34% | +0,64% | −14% | 1,22 | 241 |
+| keltner diário | 0,02% | +1,26% | +0,64% | −14% | 1,15 | 196 |
+| keltner diário | 0,03% | +1,32% | +0,70% | −13% | 1,30 | 216 |
+| keltner diário | **0,05%** | +1,36% | +0,68% | −14% | 1,25 | 229 |
+
+Leituras:
+
+- O filtro só de **euforia extrema (0,05%)** melhorou ou empatou nas três; limites apertados (0,02%) bloqueiam demais.
+- O ganho veio de **poucas operações evitadas** (12 na ema_cross 4h), que eram compras em topos eufóricos de 2020–2021. É uma amostra pequena: evidência moderada, não certeza.
+- Desde 2024 quase não muda, porque o mercado quase não teve euforia nesse período.
+- Decisão: 3 contas de paper novas (`*_funding`), com os mesmos parâmetros congelados das contas sem filtro mais `max_funding = 0.0005`, para comparar lado a lado.

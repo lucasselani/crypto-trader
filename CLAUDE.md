@@ -22,6 +22,7 @@ cp .env.example .env                                         # config (paper por
 .venv/bin/ruff check src tests            # lint
 
 .venv/bin/trader fetch --since 2018-01-01                              # baixa/atualiza candles em data/
+.venv/bin/trader fetch-funding                                         # histórico de funding dos perpétuos (binanceusdm)
 .venv/bin/trader compare --offline                                     # estratégias × ativos
 .venv/bin/trader portfolio --offline                                   # carteira com caixa compartilhado (como o agente)
 .venv/bin/trader backtest --strategy donchian --symbol BTC/USDT --trades --param entry_n=40
@@ -44,9 +45,9 @@ cp .env.example .env                                         # config (paper por
 | Módulo | Papel |
 |---|---|
 | `config.py` | `Settings.from_env()`: lê `.env` (`TRADER_*`). `symbols` = o que o agente opera; `universe` = moedas da bateria de simulações |
-| `data.py` | `ccxt`: candles paginados, cache CSV incremental em `data/`. Dados sempre da exchange real, mesmo em testnet |
+| `data.py` | `ccxt`: candles paginados, cache CSV incremental em `data/`. Dados sempre da exchange real, mesmo em testnet. Funding dos perpétuos (`load_funding`, `attach_funding`: média dos últimos 21 pagamentos conhecida no fechamento do candle) |
 | `indicators.py` | SMA, EMA, RSI e ATR (Wilder), Donchian |
-| `strategies/` | `Strategy` (dataclass frozen): `signals(df) -> (entry, exit)`, `warmup`, `grid` para walk-forward. Registro em `strategies/__init__.py` |
+| `strategies/` | `Strategy` (dataclass frozen): `signals(df) -> (entry, exit)`, `warmup`, `grid` para walk-forward. Registro em `strategies/__init__.py`. `max_funding` (base) bloqueia entradas quando a coluna `funding` passa do limite |
 | `strategies/rotation.py` | `RotationStrategy`: ranqueia ativos por `score` e fica com os `top_k` (`run_rotation` em `backtest.py`, despachado pelo `run_portfolio`). O agente ao vivo **ainda não** opera rotação: não colocar em contas de paper |
 | `risk.py` | `RiskConfig`, `position_size` (risco fixo por trade), `drawdown` |
 | `backtest.py` | `run_portfolio`: motor barra a barra multiativo com caixa compartilhado, limite de posições e kill switch, igual ao agente. `run_backtest` é o caso de um ativo sem kill switch. `CostModel` e métricas (CAGR, drawdown, Sharpe, Calmar, profit factor, exposição, buy & hold) |
@@ -79,4 +80,4 @@ Timer do systemd do usuário em `deploy/systemd/` (instalado em `~/.config/syste
 
 Pré-requisitos prontos: dados, 3 estratégias de exemplo, backtest de ativo e de carteira com custos, walk-forward de ativo e de carteira, bateria de simulações com critérios, paper agendado, execução na testnet validada em 16/10/2026 (compra, stop na exchange, mover stop, cancelar, venda), diário. Ainda **não** existe: filtro de notícias/LLM, alertas, interface, controle de imposto. Imposto e exchange nacional vs. global ficaram para depois, por decisão do usuário.
 
-Resultado da bateria de 16/10/2026 (walk-forward, 10 moedas, até 3 posições, risco de 1%): aprovadas `donchian` no diário (CAGR 16,6%, queda máxima −12%, Calmar 1,38) e `ema_cross` no 4h (CAGR 24,9%, queda −23,5%, Calmar 1,06). `rsi_pullback` reprovou nos dois timeframes. Em 17/10/2026 foram congeladas 10 contas de paper (donchian, keltner, sma_trend, ema_cross, roc_momentum × 1d e 4h) para colher dados por alguns meses; o usuário não pretende sair da renda fixa por enquanto. **Não recongelar** (`trader freeze`) sem pedido: isso apaga a referência da data de congelamento. Histórico de baterias e decisões em `docs/resultados.md` (registrar lá cada bateria nova). Ver `docs/agente-swing.md`.
+Resultado da bateria de 16/10/2026 (walk-forward, 10 moedas, até 3 posições, risco de 1%): aprovadas `donchian` no diário (CAGR 16,6%, queda máxima −12%, Calmar 1,38) e `ema_cross` no 4h (CAGR 24,9%, queda −23,5%, Calmar 1,06). `rsi_pullback` reprovou nos dois timeframes. Em 17/10/2026 foram congeladas 13 contas de paper (donchian, keltner, sma_trend, ema_cross, roc_momentum × 1d e 4h, mais ema_cross 4h, donchian 1d e keltner 1d com filtro de funding `*_funding`) para colher dados por alguns meses; o usuário não pretende sair da renda fixa por enquanto. **Não recongelar** (`trader freeze`) sem pedido: isso apaga a referência da data de congelamento. Histórico de baterias e decisões em `docs/resultados.md` (registrar lá cada bateria nova). Ver `docs/agente-swing.md`.
