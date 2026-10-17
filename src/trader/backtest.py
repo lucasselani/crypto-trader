@@ -75,9 +75,12 @@ def compute_metrics(
     losses = [t.pnl for t in trades if t.pnl <= 0]
     pf = sum(wins) / -sum(losses) if losses and sum(losses) < 0 else float("inf") if wins else 0.0
     c = close.loc[eq.index]
+    months = (eq.index[-1] - eq.index[0]).days / 30.4375
+    monthly = (eq.iloc[-1] / eq.iloc[0]) ** (1 / months) - 1 if eq.iloc[-1] > 0 and months else 0.0
     return {
         "total_return": float(total),
         "cagr": float(cagr),
+        "monthly": float(monthly),
         "max_drawdown": max_dd,
         "sharpe": sharpe,
         "calmar": float(cagr / abs(max_dd)) if max_dd < 0 else 0.0,

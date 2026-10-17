@@ -84,6 +84,26 @@ def _score(result: BacktestResult, objective: str, min_trades: int) -> float:
     return float(m.get(objective, float("-inf")))
 
 
+def optimize(
+    data: dict[str, pd.DataFrame],
+    candidates: list[Strategy],
+    *,
+    objective: str = "calmar",
+    min_trades: int = 3,
+    kill_switch: bool = False,
+    fallback: Strategy | None = None,
+    **bt_kwargs,
+) -> tuple[Strategy, BacktestResult]:
+    """Melhor candidata no período `data` pelo `objective`. Se nenhuma operar o suficiente, usa
+    `fallback` (ou a primeira candidata)."""
+    scored = [(s, run_portfolio(data, s, kill_switch=kill_switch, **bt_kwargs)) for s in candidates]
+    best, best_res = max(scored, key=lambda sr: _score(sr[1], objective, min_trades))
+    if _score(best_res, objective, min_trades) == float("-inf"):
+        fb = fallback or candidates[0]
+        return fb, run_portfolio(data, fb, kill_switch=kill_switch, **bt_kwargs)
+    return best, best_res
+
+
 def walk_forward(
     data: pd.DataFrame | dict[str, pd.DataFrame],
     base: Strategy,
@@ -119,10 +139,8 @@ def walk_forward(
     oos_trades = []
     for k in range(train_bars, len(index) - 1, test_bars):
         train = window(k - train_bars, k)
-        scored = [(s, run(train, s)) for s in candidates]
-        best, best_res = max(scored, key=lambda sr: _score(sr[1], objective, min_trades))
-        if _score(best_res, objective, min_trades) == float("-inf"):
-            best, best_res = base, run(train, base)
+        best, best_res = optimize(train, candidates, objective=objective, min_trades=min_trades,
+                                  kill_switch=kill_switch, fallback=base, **bt_kwargs)
 
         test_end = min(k + test_bars, len(index))
         res = run(window(max(0, k - best.warmup - 1), test_end), best, trade_from=index[k])

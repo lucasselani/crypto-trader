@@ -46,3 +46,8 @@ def donchian_high(high: pd.Series, n: int) -> pd.Series:
 def donchian_low(low: pd.Series, n: int) -> pd.Series:
     """Mínima das n barras anteriores (exclui a barra corrente)."""
     return low.rolling(n, min_periods=n).min().shift(1)
+
+
+def roc(close: pd.Series, n: int) -> pd.Series:
+    """Variação percentual em n barras (rate of change)."""
+    return close / close.shift(n) - 1

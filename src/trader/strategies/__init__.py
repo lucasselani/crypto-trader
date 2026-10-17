@@ -1,8 +1,16 @@
 from trader.strategies.base import Strategy
-from trader.strategies.trend import DonchianBreakout, EmaCross, RsiPullback
+from trader.strategies.trend import (
+    DonchianBreakout,
+    EmaCross,
+    KeltnerBreakout,
+    RocMomentum,
+    RsiPullback,
+    SmaTrend,
+)
 
 STRATEGIES: dict[str, type[Strategy]] = {
-    cls.name: cls for cls in (EmaCross, DonchianBreakout, RsiPullback)
+    cls.name: cls
+    for cls in (EmaCross, DonchianBreakout, RsiPullback, SmaTrend, RocMomentum, KeltnerBreakout)
 }
 
 

@@ -26,16 +26,17 @@ Comprar e segurar as 10 moedas no mesmo período: ~1.400%, com queda de até −
 | ema_cross 4h, 1%, 5 posições | 45,7% | −28,5% | 1,60 | 1,62 |
 | ema_cross 4h, 2%, 3 posições | 39,0% | −40,5% | 0,96 | 1,23 |
 | ema_cross 4h, 2%, 5 posições | 79,9% | −44,8% | 1,78 | 1,70 |
-| **metade em cada (1%, 3 posições)** | 21,2% | −15,8% | 1,34 | **1,69** |
-| metade em cada (1%, 5 posições) | 37,0% | −23,3% | 1,59 | 1,86 |
-| metade em cada (2%, 3 posições) | 35,8% | −28,5% | 1,26 | 1,57 |
-| metade em cada (2%, 5 posições) | 65,9% | −40,7% | 1,62 | 1,80 |
+| **metade em cada (1%, 3 posições)** | 21,2% | −15,8% | 1,34 | **1,49** |
+| metade em cada (1%, 5 posições) | 37,0% | −23,3% | 1,59 | 1,68 |
+| metade em cada (2%, 3 posições) | 35,8% | −28,5% | 1,26 | 1,42 |
+| metade em cada (2%, 5 posições) | 65,9% | −40,7% | 1,62 | 1,60 |
 
 Leituras:
 
 - **Risco 2% em vez de 1%** dobra o ganho e a queda juntos; a qualidade (Calmar) quase não muda. É uma escolha de quanto se aguenta ver cair, não de estratégia melhor.
 - **5 posições em vez de 3** piora a donchian diária (cripto cai junto: mais moedas abertas = queda maior) e melhora a ema_cross 4h. Os números do 4h oscilam muito entre configurações vizinhas, sinal de que são sensíveis; não confiar nos retornos de 4 dígitos.
-- **Combinar as duas** (metade do capital em cada) funciona: a correlação entre elas é ~0,1 (ganham em momentos diferentes), e o Sharpe da combinação é maior que o de qualquer uma sozinha.
+- **Combinar as duas** (metade do capital em cada) ajuda, mas menos do que parecia: a correlação semanal entre elas é ~0,5. O Sharpe da combinação (1,49) é um pouco maior que o de cada uma (1,29 e 1,33) e a queda máxima fica no meio.
+- *Correção (17/10):* a primeira versão desta tabela dizia correlação ~0,1 e Sharpe 1,69 para a combinação. Era um erro de alinhamento ao misturar curva diária com curva de 4h (a diária parecia parada entre um dia e outro). Sharpe e correlação de combinações agora são medidos em retornos diários/semanais.
 - Decisão atual: paper segue com donchian diária, 1%, 3 posições (funciona com o PC desligado à noite). A combinação com 4h fica para quando houver um servidor ligado 24h.
 
 Como reproduzir: `trader battery --timeframes 1d --strategies donchian --risk 0.01 0.02 --max-positions 3 5` (idem para `4h ema_cross`); as curvas ficam em `data/results/equity_*.csv`.
@@ -58,3 +59,30 @@ Média mensal composta (a taxa fixa por mês que leva ao mesmo resultado final),
 | hold 10 moedas | +3,56% | 55% | −33,4% | −85% | 175.818 |
 
 "Meses no positivo" baixo nas estratégias diárias é porque muitos meses ficam em caixa (0%). Desde 2024 a donchian diária sozinha ficou perto de 0%/mês; a combinação, perto de 0,8%/mês; o hold de BTC, perto de 2%/mês.
+
+## 17/10/2026 – três estratégias novas e o período recente
+
+Novas: `sma_trend` (média simples, estilo Meb Faber), `roc_momentum` (momentum em série temporal) e `keltner` (rompimento de faixa de volatilidade). Aprovada só a `keltner` no diário (17,3% ao ano, queda máxima −14%, Calmar 1,22). As outras ficaram com Calmar entre 0,45 e 0,89.
+
+Média mensal no período todo vs. desde 2024 (risco 1%, 3 posições):
+
+| | Mês 2020–26 | Mês desde 2024 | Pior queda | Pior queda desde 2024 |
+|---|---|---|---|---|
+| hold só BTC | +3,00% | +1,85% | −77% | −53% |
+| ema_cross 4h | +1,87% | +1,47% | −24% | −21% |
+| donchian 4h | +1,82% | +1,05% | −31% | −25% |
+| keltner 4h | +1,99% | +1,03% | −30% | −27% |
+| sma_trend 4h | +2,37% | +1,01% | −36% | −24% |
+| roc_momentum 4h | +1,61% | +0,91% | −31% | −24% |
+| metade donchian 1d + ema_cross 4h | +1,62% | +0,84% | −16% | −14% |
+| roc_momentum diário | +0,58% | +0,72% | −16% | −10% |
+| keltner diário | +1,34% | +0,64% | −14% | −13% |
+| ema_cross diário | +0,63% | +0,55% | −11% | −11% |
+| sma_trend diário | +1,24% | +0,44% | −22% | −8% |
+| hold 10 moedas | +3,59% | +0,21% | −85% | −72% |
+| donchian diário | +1,29% | +0,06% | −12% | −11% |
+| rsi_pullback diário / 4h | +0,02% / −0,25% | +0,06% / −0,59% | −5% / −35% | |
+
+Leituras: desde 2024 o 4h foi melhor que o diário em todas as estratégias; nenhuma diária passou de 0,75%/mês. As estratégias de rompimento diárias (donchian e keltner) são muito parecidas (correlação semanal 0,82); as outras ficam entre 0,4 e 0,6.
+
+Decisão: não sair da renda fixa agora; colher dados. Congeladas 10 contas de paper (5 estratégias × diário e 4h) em `config/paper_accounts.json`, para medir daqui a alguns meses com `trader forward` (simulação desde o congelamento) e `trader status` (o que o paper fez).

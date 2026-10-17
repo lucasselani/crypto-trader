@@ -1,4 +1,5 @@
-"""CLI: `trader fetch | backtest | compare | portfolio | walkforward | battery | run`."""
+"""CLI: `trader fetch | backtest | compare | portfolio | walkforward | battery | freeze | run |
+status | forward`."""
 
 from __future__ import annotations
 
@@ -15,9 +16,9 @@ from trader.config import Settings
 from trader.data import load_candles, make_exchange
 from trader.risk import RiskConfig
 from trader.strategies import STRATEGIES, get_strategy
-from trader.walkforward import evaluate, walk_forward
+from trader.walkforward import evaluate, optimize, param_grid, walk_forward
 
-PCT = ("total_return", "cagr", "max_drawdown", "win_rate", "avg_trade", "exposure", "buy_hold")
+PCT = ("total_return", "cagr", "monthly", "max_drawdown", "win_rate", "avg_trade", "exposure", "buy_hold")
 
 
 def parse_params(items: list[str]) -> dict:
@@ -136,7 +137,7 @@ def cmd_battery(s: Settings, a: argparse.Namespace) -> None:
                     m = res.metrics
                     rows.append({
                         "timeframe": tf, "strategy": name, "risk": risk_pct, "max_pos": max_pos,
-                        **{k: m.get(k) for k in ("total_return", "cagr", "max_drawdown", "calmar",
+                        **{k: m.get(k) for k in ("total_return", "monthly", "max_drawdown", "calmar",
                                                  "sharpe", "profit_factor", "trades", "buy_hold")},
                         **{f"ok_{k}": v for k, v in checks.items()},
                     })
@@ -148,7 +149,7 @@ def cmd_battery(s: Settings, a: argparse.Namespace) -> None:
     # curvas de patrimônio fora da amostra (base 1.0), para combinar estratégias depois
     pd.concat(curves, axis=1).to_csv(out.with_name(f"equity_{stamp}.csv"), index_label="time")
     show = df.copy()
-    for col in ("total_return", "cagr", "max_drawdown", "buy_hold"):
+    for col in ("total_return", "monthly", "max_drawdown", "buy_hold"):
         show[col] = show[col].map(lambda v: f"{v:.1%}" if pd.notna(v) else "")
     for col in ("calmar", "sharpe", "profit_factor"):
         show[col] = show[col].map(lambda v: f"{v:.2f}" if pd.notna(v) else "")
@@ -157,12 +158,108 @@ def cmd_battery(s: Settings, a: argparse.Namespace) -> None:
     print(f"\nSalvo em {out}")
 
 
+def _universe_data(s: Settings, timeframe: str, since, refresh: bool) -> dict[str, pd.DataFrame]:
+    return {sym: _candles(s, sym, since, refresh=refresh, timeframe=timeframe) for sym in s.universe}
+
+
+def cmd_freeze(s: Settings, a: argparse.Namespace) -> None:
+    from trader.accounts import Account, AccountBook
+
+    now = pd.Timestamp.now(tz="UTC").normalize()
+    accounts = []
+    for spec in a.spec:
+        name, _, tf = spec.partition(":")
+        bpd = bars_per_day(tf)
+        data = _universe_data(s, tf, now - pd.Timedelta(days=a.train_days), refresh=not a.offline)
+        base = get_strategy(name)
+        candidates = [base.with_params(**p) for p in param_grid(type(base).grid)] or [base]
+        best, res = optimize(data, candidates, objective=a.objective, fallback=base,
+                             costs=s.costs, risk=s.risk)
+        params = {k: best.params()[k] for k in type(base).grid}
+        print(f"{name} {tf}: {params}  (últimos {a.train_days:g} dias, "
+              f"calmar {res.metrics.get('calmar', 0):.2f}, {int(a.train_days * bpd)} barras)")
+        accounts.append(Account(f"{name}_{tf}", name, tf, params, s.risk.risk_per_trade,
+                                s.risk.max_open_positions))
+    AccountBook(now.date().isoformat(), accounts).save(a.accounts)
+    print(f"\nContas congeladas em {a.accounts}")
+
+
+def cmd_status(s: Settings, a: argparse.Namespace) -> None:
+    from trader.accounts import AccountBook
+
+    book = AccountBook.load(a.accounts)
+    market = make_exchange(s.exchange)
+    prices = {sym: t["last"] for sym, t in market.fetch_tickers(s.universe).items()}
+    rows = []
+    for acc in book.accounts:
+        st = acc.settings(s).state_dir
+        broker_file = st / "paper_broker.json"
+        if broker_file.exists():
+            state = json.loads(broker_file.read_text())
+        elif (st / "agent_paper.json").exists():
+            state = {"cash": s.paper_cash, "holdings": {}}  # rodou, mas ainda não operou
+        else:
+            rows.append({"conta": acc.name, "patrimônio": "ainda não rodou"})
+            continue
+        holdings = state["holdings"]
+        equity = state["cash"] + sum(q * prices.get(sym, 0.0) for sym, q in holdings.items())
+        journal = st / "journal.jsonl"
+        acts = [json.loads(line)["action"] for line in journal.read_text().splitlines()] \
+            if journal.exists() else []
+        rows.append({
+            "conta": acc.name,
+            "patrimônio": f"{equity:,.0f}",
+            "resultado": f"{equity / s.paper_cash - 1:+.2%}",
+            "posições": ", ".join(sorted(holdings)) or "-",
+            "compras": acts.count("buy"),
+            "saídas": acts.count("sell") + acts.count("stop"),
+        })
+    print(f"Paper desde {book.frozen_at}, {s.paper_cash:,.0f} USDT por conta\n")
+    print(pd.DataFrame(rows).to_string(index=False))
+
+
+def cmd_forward(s: Settings, a: argparse.Namespace) -> None:
+    from trader.accounts import AccountBook
+
+    book = AccountBook.load(a.accounts)
+    rows = []
+    for acc in book.accounts:
+        strat = acc.build()
+        bpd = bars_per_day(acc.timeframe)
+        since = book.frozen_ts - pd.Timedelta(days=strat.warmup / bpd * 2 + 5)
+        data = _universe_data(s, acc.timeframe, since, refresh=not a.offline)
+        cfg = acc.settings(s)
+        res = run_portfolio(data, strat, costs=s.costs, risk=cfg.risk, trade_from=book.frozen_ts)
+        m = res.metrics
+        if len(res.equity) < 2:
+            rows.append({"conta": acc.name, "total_return": "sem candles novos ainda"})
+            continue
+        rows.append({"conta": acc.name, **fmt_metrics({k: m.get(k) for k in (
+            "total_return", "monthly", "max_drawdown", "trades", "buy_hold") if k in m})})
+    print(f"Simulação desde o congelamento ({book.frozen_at}), parâmetros congelados:\n")
+    print(pd.DataFrame(rows).fillna("sem dados ainda").to_string(index=False))
+
+
 def cmd_run(s: Settings, a: argparse.Namespace) -> None:
     from trader.agent import SwingAgent
     from trader.broker import ExchangeBroker, PaperBroker
 
     s.check_live_allowed()
     market = make_exchange(s.exchange)
+    if a.accounts:
+        from trader.accounts import AccountBook
+
+        for acc in AccountBook.load(a.accounts).accounts:
+            cfg = acc.settings(s)
+            broker = PaperBroker(cfg.state_dir / "paper_broker.json", market, s.paper_cash,
+                                 s.costs.fee_rate, s.costs.slippage)
+            agent = SwingAgent(cfg, acc.build(), broker, market, cfg.state_dir / "agent_paper.json",
+                               cfg.state_dir / "journal.jsonl")
+            for d in agent.run_once(dry_run=a.dry_run):
+                if d.action != "hold" or a.verbose:
+                    print(f"[{acc.name}] {d.symbol:<10} {d.action:<5} {d.reason} {_extra(d)}")
+            print(f"[{acc.name}] ok")
+        return
     if s.mode == "paper":
         broker = PaperBroker(s.state_dir / "paper_broker.json", market, s.paper_cash,
                              s.costs.fee_rate, s.costs.slippage)
@@ -179,9 +276,12 @@ def cmd_run(s: Settings, a: argparse.Namespace) -> None:
     agent = SwingAgent(s, get_strategy(a.strategy or s.strategy, **parse_params(a.param)), broker,
                        market, s.state_dir / f"agent_{s.mode}.json", s.state_dir / "journal.jsonl")
     for d in agent.run_once(dry_run=a.dry_run):
-        extra = " ".join(f"{k}={v:.6g}" for k, v in (("price", d.price), ("qty", d.qty),
-                                                      ("stop", d.stop)) if v is not None)
-        print(f"[{d.mode}] {d.symbol:<10} {d.action:<5} {d.reason} {extra}")
+        print(f"[{d.mode}] {d.symbol:<10} {d.action:<5} {d.reason} {_extra(d)}")
+
+
+def _extra(d) -> str:
+    return " ".join(f"{k}={v:.6g}" for k, v in (("price", d.price), ("qty", d.qty),
+                                                ("stop", d.stop)) if v is not None)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -241,13 +341,30 @@ def main(argv: list[str] | None = None) -> None:
     r.add_argument("--strategy", choices=list(STRATEGIES))
     r.add_argument("--param", nargs="*", default=[])
     r.add_argument("--dry-run", action="store_true", help="só mostra as decisões, não executa")
+    r.add_argument("--accounts", help="arquivo de contas de paper (roda todas, sempre em paper)")
+    r.add_argument("--verbose", action="store_true", help="com --accounts, mostra também os 'hold'")
+
+    fz = sub.add_parser("freeze", help="congela contas de paper com os melhores parâmetros de hoje")
+    fz.add_argument("--spec", nargs="+", required=True, help="estratégia:timeframe, ex.: donchian:1d")
+    fz.add_argument("--accounts", default="config/paper_accounts.json")
+    fz.add_argument("--train-days", type=float, default=730)
+    fz.add_argument("--objective", default="calmar", choices=["calmar", "sharpe", "total_return"])
+    fz.add_argument("--offline", action="store_true")
+
+    stt = sub.add_parser("status", help="patrimônio atual de cada conta de paper")
+    stt.add_argument("--accounts", default="config/paper_accounts.json")
+
+    fw = sub.add_parser("forward", help="simula cada conta congelada desde a data de congelamento")
+    fw.add_argument("--accounts", default="config/paper_accounts.json")
+    fw.add_argument("--offline", action="store_true")
 
     a = p.parse_args(argv)
     s = Settings.from_env()
     if a.timeframe:
         s.timeframe = a.timeframe
     {"fetch": cmd_fetch, "backtest": cmd_backtest, "compare": cmd_compare, "portfolio": cmd_portfolio,
-     "walkforward": cmd_walkforward, "battery": cmd_battery, "run": cmd_run}[a.cmd](s, a)
+     "walkforward": cmd_walkforward, "battery": cmd_battery, "run": cmd_run,
+     "freeze": cmd_freeze, "status": cmd_status, "forward": cmd_forward}[a.cmd](s, a)
 
 
 if __name__ == "__main__":

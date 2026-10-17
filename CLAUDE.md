@@ -29,6 +29,10 @@ cp .env.example .env                                         # config (paper por
 .venv/bin/trader battery --offline                                     # walk-forward estratégias × timeframes no universo; CSV em data/results/
 .venv/bin/trader battery --timeframes 1d --strategies donchian --risk 0.01 0.02 --max-positions 3 5   # variações de risco
 .venv/bin/trader run --dry-run            # decisões do agente sem executar
+.venv/bin/trader run --accounts config/paper_accounts.json   # todas as contas de paper (é o que o timer roda)
+.venv/bin/trader status                   # patrimônio atual de cada conta de paper
+.venv/bin/trader forward                  # simulação de cada conta desde o congelamento (teste honesto do futuro)
+.venv/bin/trader freeze --spec donchian:1d ema_cross:4h   # congela contas (sobrescreve config/paper_accounts.json)
 .venv/bin/trader run                      # um ciclo do agente (modo do .env)
 ```
 
@@ -48,11 +52,12 @@ cp .env.example .env                                         # config (paper por
 | `broker.py` | `PaperBroker` (simulado, estado em `state/`) e `ExchangeBroker` (ccxt, testnet/live, stop `STOP_LOSS_LIMIT` na exchange) |
 | `agent.py` | `SwingAgent.run_once()`: um ciclo por candle fechado, idempotente por barra. Se ficou dias sem rodar, sai por sinal de saída em qualquer barra perdida, mas só entra pelo último candle |
 | `journal.py` | Toda decisão em `state/journal.jsonl` |
+| `accounts.py` | Contas de paper congeladas (`config/paper_accounts.json`, versionado): estratégia, timeframe, parâmetros e risco de cada uma; estado em `state/accounts/<nome>/` |
 | `cli.py` | Subcomandos `fetch`, `backtest`, `compare`, `walkforward`, `run` |
 
 ## Agendamento
 
-Timer do systemd do usuário em `deploy/systemd/` (instalado em `~/.config/systemd/user/`): roda `trader run` de hora em hora e no boot, com `Persistent=true`, porque o PC costuma estar desligado no fechamento do diário (21:00 de Brasília). O modo fica fixo no `.service` (`TRADER_MODE=paper`), não no `.env`. Logs: `journalctl --user -u crypto-trader -f`. Depois de editar as units: copiar para `~/.config/systemd/user/` e `systemctl --user daemon-reload`.
+Timer do systemd do usuário em `deploy/systemd/` (instalado em `~/.config/systemd/user/`): roda `trader run` de hora em hora e no boot, com `Persistent=true`, porque o PC costuma estar desligado no fechamento do diário (21:00 de Brasília). Roda `trader run --accounts config/paper_accounts.json` (todas as contas, sempre em paper). As contas de 4h só pegam os candles fechados enquanto o PC está ligado; a avaliação justa delas é pelo `trader forward`. Logs: `journalctl --user -u crypto-trader -f`. Depois de editar as units: copiar para `~/.config/systemd/user/` e `systemctl --user daemon-reload`.
 
 ## Como adicionar uma estratégia
 
@@ -71,4 +76,4 @@ Timer do systemd do usuário em `deploy/systemd/` (instalado em `~/.config/syste
 
 Pré-requisitos prontos: dados, 3 estratégias de exemplo, backtest de ativo e de carteira com custos, walk-forward de ativo e de carteira, bateria de simulações com critérios, paper agendado, execução na testnet validada em 16/10/2026 (compra, stop na exchange, mover stop, cancelar, venda), diário. Ainda **não** existe: filtro de notícias/LLM, alertas, interface, controle de imposto. Imposto e exchange nacional vs. global ficaram para depois, por decisão do usuário.
 
-Resultado da bateria de 16/10/2026 (walk-forward, 10 moedas, até 3 posições, risco de 1%): aprovadas `donchian` no diário (CAGR 16,6%, queda máxima −12%, Calmar 1,38) e `ema_cross` no 4h (CAGR 24,9%, queda −23,5%, Calmar 1,06). `rsi_pullback` reprovou nos dois timeframes. O paper roda `donchian` diário nas 10 moedas. Histórico de baterias e decisões em `docs/resultados.md` (registrar lá cada bateria nova). Ver `docs/agente-swing.md`.
+Resultado da bateria de 16/10/2026 (walk-forward, 10 moedas, até 3 posições, risco de 1%): aprovadas `donchian` no diário (CAGR 16,6%, queda máxima −12%, Calmar 1,38) e `ema_cross` no 4h (CAGR 24,9%, queda −23,5%, Calmar 1,06). `rsi_pullback` reprovou nos dois timeframes. Em 17/10/2026 foram congeladas 10 contas de paper (donchian, keltner, sma_trend, ema_cross, roc_momentum × 1d e 4h) para colher dados por alguns meses; o usuário não pretende sair da renda fixa por enquanto. **Não recongelar** (`trader freeze`) sem pedido: isso apaga a referência da data de congelamento. Histórico de baterias e decisões em `docs/resultados.md` (registrar lá cada bateria nova). Ver `docs/agente-swing.md`.

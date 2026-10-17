@@ -1,0 +1,127 @@
+{
+  "frozen_at": "2026-10-17",
+  "accounts": [
+    {
+      "name": "donchian_1d",
+      "strategy": "donchian",
+      "timeframe": "1d",
+      "params": {
+        "entry_n": 20,
+        "exit_n": 20,
+        "regime": 200,
+        "stop_atr_mult": 2.0
+      },
+      "risk_per_trade": 0.01,
+      "max_open_positions": 3
+    },
+    {
+      "name": "keltner_1d",
+      "strategy": "keltner",
+      "timeframe": "1d",
+      "params": {
+        "n": 50,
+        "k": 1.5,
+        "stop_atr_mult": 2.0
+      },
+      "risk_per_trade": 0.01,
+      "max_open_positions": 3
+    },
+    {
+      "name": "sma_trend_1d",
+      "strategy": "sma_trend",
+      "timeframe": "1d",
+      "params": {
+        "n": 200,
+        "stop_atr_mult": 3.0
+      },
+      "risk_per_trade": 0.01,
+      "max_open_positions": 3
+    },
+    {
+      "name": "ema_cross_1d",
+      "strategy": "ema_cross",
+      "timeframe": "1d",
+      "params": {
+        "fast": 10,
+        "slow": 50,
+        "regime": 150,
+        "stop_atr_mult": 2.0
+      },
+      "risk_per_trade": 0.01,
+      "max_open_positions": 3
+    },
+    {
+      "name": "roc_momentum_1d",
+      "strategy": "roc_momentum",
+      "timeframe": "1d",
+      "params": {
+        "lookback": 60,
+        "regime": 100,
+        "stop_atr_mult": 3.0
+      },
+      "risk_per_trade": 0.01,
+      "max_open_positions": 3
+    },
+    {
+      "name": "ema_cross_4h",
+      "strategy": "ema_cross",
+      "timeframe": "4h",
+      "params": {
+        "fast": 20,
+        "slow": 100,
+        "regime": 200,
+        "stop_atr_mult": 4.0
+      },
+      "risk_per_trade": 0.01,
+      "max_open_positions": 3
+    },
+    {
+      "name": "donchian_4h",
+      "strategy": "donchian",
+      "timeframe": "4h",
+      "params": {
+        "entry_n": 40,
+        "exit_n": 10,
+        "regime": 200,
+        "stop_atr_mult": 3.0
+      },
+      "risk_per_trade": 0.01,
+      "max_open_positions": 3
+    },
+    {
+      "name": "keltner_4h",
+      "strategy": "keltner",
+      "timeframe": "4h",
+      "params": {
+        "n": 20,
+        "k": 2.5,
+        "stop_atr_mult": 3.0
+      },
+      "risk_per_trade": 0.01,
+      "max_open_positions": 3
+    },
+    {
+      "name": "sma_trend_4h",
+      "strategy": "sma_trend",
+      "timeframe": "4h",
+      "params": {
+        "n": 50,
+        "stop_atr_mult": 5.0
+      },
+      "risk_per_trade": 0.01,
+      "max_open_positions": 3
+    },
+    {
+      "name": "roc_momentum_4h",
+      "strategy": "roc_momentum",
+      "timeframe": "4h",
+      "params": {
+        "lookback": 90,
+        "regime": 100,
+        "stop_atr_mult": 4.0
+      },
+      "risk_per_trade": 0.01,
+      "max_open_positions": 3
+    }
+  ]
+}

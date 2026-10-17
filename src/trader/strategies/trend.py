@@ -7,7 +7,7 @@ from typing import ClassVar
 
 import pandas as pd
 
-from trader.indicators import donchian_high, donchian_low, ema, rsi, sma
+from trader.indicators import atr, donchian_high, donchian_low, ema, roc, rsi, sma
 from trader.strategies.base import Strategy
 
 
@@ -91,3 +91,80 @@ class RsiPullback(Strategy):
         close = df["close"]
         r = rsi(close, self.rsi_n)
         return (r < self.entry_below) & (close > sma(close, self.regime)), r > self.exit_above
+
+
+@dataclass(frozen=True)
+class SmaTrend(Strategy):
+    """Filtro de tendência puro (estilo Meb Faber): compra quando o preço cruza a média para cima,
+    sai quando fecha abaixo dela."""
+
+    n: int = 150
+    stop_atr_mult: float = 4.0
+
+    name: ClassVar[str] = "sma_trend"
+    grid: ClassVar[dict[str, list]] = {
+        "n": [50, 100, 150, 200],
+        "stop_atr_mult": [3.0, 4.0, 5.0],
+    }
+
+    @property
+    def warmup(self) -> int:
+        return max(self.n, self.atr_period) + 1
+
+    def signals(self, df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+        close = df["close"]
+        above = close > sma(close, self.n)
+        return above & ~above.shift(1, fill_value=False), ~above
+
+
+@dataclass(frozen=True)
+class RocMomentum(Strategy):
+    """Momentum em série temporal: compra quando a variação de N barras vira positiva (com o preço
+    acima da média de regime), sai quando ela fica negativa."""
+
+    lookback: int = 60
+    regime: int = 200
+
+    name: ClassVar[str] = "roc_momentum"
+    grid: ClassVar[dict[str, list]] = {
+        "lookback": [30, 60, 90],
+        "regime": [100, 200],
+        "stop_atr_mult": [3.0, 4.0],
+    }
+
+    @property
+    def warmup(self) -> int:
+        return max(self.lookback, self.regime, self.atr_period) + 1
+
+    def signals(self, df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+        close = df["close"]
+        positive = roc(close, self.lookback) > 0
+        turned = positive & ~positive.shift(1, fill_value=False)
+        return turned & (close > sma(close, self.regime)), ~positive
+
+
+@dataclass(frozen=True)
+class KeltnerBreakout(Strategy):
+    """Rompimento de volatilidade: compra quando fecha acima de média + k × ATR (com o preço acima da
+    média de regime), sai quando volta para baixo da média."""
+
+    n: int = 20
+    k: float = 2.0
+    regime: int = 200
+
+    name: ClassVar[str] = "keltner"
+    grid: ClassVar[dict[str, list]] = {
+        "n": [20, 50],
+        "k": [1.5, 2.0, 2.5],
+        "stop_atr_mult": [2.0, 3.0],
+    }
+
+    @property
+    def warmup(self) -> int:
+        return max(self.n, self.regime, self.atr_period) + 1
+
+    def signals(self, df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+        close = df["close"]
+        mid = ema(close, self.n)
+        upper = mid + self.k * atr(df, self.n)
+        return (close > upper) & (close > sma(close, self.regime)), close < mid

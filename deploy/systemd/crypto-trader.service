@@ -9,4 +9,5 @@ WorkingDirectory=%h/Projects/crypto-trader
 # Modo fixado aqui de propósito: mudar o .env não troca o modo do agendamento sem querer.
 # Para testnet, troque para TRADER_MODE=testnet. Live nunca deve ser agendado sem revisão.
 Environment=TRADER_MODE=paper
-ExecStart=%h/Projects/crypto-trader/.venv/bin/trader run
+# Roda todas as contas de paper congeladas (sempre em paper, independente do TRADER_MODE).
+ExecStart=%h/Projects/crypto-trader/.venv/bin/trader run --accounts config/paper_accounts.json
