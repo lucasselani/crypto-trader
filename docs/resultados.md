@@ -86,3 +86,32 @@ Média mensal no período todo vs. desde 2024 (risco 1%, 3 posições):
 Leituras: desde 2024 o 4h foi melhor que o diário em todas as estratégias; nenhuma diária passou de 0,75%/mês. As estratégias de rompimento diárias (donchian e keltner) são muito parecidas (correlação semanal 0,82); as outras ficam entre 0,4 e 0,6.
 
 Decisão: não sair da renda fixa agora; colher dados. Congeladas 10 contas de paper (5 estratégias × diário e 4h) em `config/paper_accounts.json`, para medir daqui a alguns meses com `trader forward` (simulação desde o congelamento) e `trader status` (o que o paper fez).
+
+## 17/10/2026 – resultado por fase do mercado (`trader regimes`)
+
+Fase de cada dia pela variação do BTC nos 90 dias anteriores (só passado): alta ≥ +20%, baixa ≤ −20%, lateral no meio. Ideia adaptada do Vibe-Trading.
+
+Mistura de fases: antes de 2024, 38% alta / 42% lateral / 20% baixa; desde 2024, 34% / **54%** / 12%.
+
+Média mensal **dentro** de cada fase (risco 1%, 3 posições):
+
+| | Alta antes | Alta depois | Lateral antes | Lateral depois | Baixa antes | Baixa depois |
+|---|---|---|---|---|---|---|
+| hold BTC | +8,5% | +6,3% | 0,0% | −1,8% | +3,1% | +6,0% |
+| ema_cross 4h | +3,9% | **+3,4%** | +1,4% | +0,5% | +0,5% | +0,6% |
+| donchian 4h | +4,8% | +3,0% | +1,5% | +0,1% | −0,6% | −0,4% |
+| keltner 4h | +5,8% | +2,9% | +1,8% | +0,6% | −1,3% | −2,1% |
+| sma_trend 4h | +7,2% | +3,8% | +1,6% | −0,7% | −0,3% | +0,7% |
+| roc_momentum 4h | +4,0% | +3,0% | +1,8% | +0,1% | −0,7% | −1,3% |
+| donchian diário | +3,8% | **+0,4%** | +1,6% | −0,1% | +0,2% | 0,0% |
+| keltner diário | +3,7% | +2,3% | +1,0% | −0,3% | 0,0% | 0,0% |
+| sma_trend diário | +4,7% | +1,6% | +0,1% | −0,3% | −0,1% | +0,3% |
+| ema_cross diário | +0,9% | +2,1% | +0,9% | −0,3% | −0,1% | 0,0% |
+| roc_momentum diário | +1,1% | +2,8% | +0,2% | −0,4% | −0,1% | 0,0% |
+
+Leituras:
+
+- **Parte é o mercado:** desde 2024 o mercado passou mais da metade do tempo lateral (54% contra 42%), fase em que as estratégias de tendência ficam perto de zero. E as altas foram mais fracas: o próprio BTC rendeu 6,3%/mês nas fases de alta, contra 8,5% antes (−25%).
+- **Parte é a estratégia:** a donchian diária caiu de +3,8% para +0,4%/mês **nas fases de alta** (−90%), muito mais do que o enfraquecimento do mercado explica. Ela deixou de pegar as altas. As outras perderam entre 20% e 50% nas altas, compatível com o mercado.
+- **A mais robusta é a ema_cross 4h:** quase igual nas altas (+3,9% → +3,4%) e positiva em todas as fases nos dois períodos.
+- Em "baixa" o hold de BTC aparece positivo porque o rótulo usa os 90 dias passados: depois de uma queda forte, o BTC muitas vezes repica. As estratégias, por regra, quase não compram nessa fase.

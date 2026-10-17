@@ -32,6 +32,7 @@ cp .env.example .env                                         # config (paper por
 .venv/bin/trader run --accounts config/paper_accounts.json   # todas as contas de paper (é o que o timer roda)
 .venv/bin/trader status                   # patrimônio atual de cada conta de paper
 .venv/bin/trader forward                  # simulação de cada conta desde o congelamento (teste honesto do futuro)
+.venv/bin/trader regimes --offline        # resultado por fase do mercado (alta/lateral/baixa), antes vs. desde 2024
 .venv/bin/trader freeze --spec donchian:1d ema_cross:4h   # congela contas (sobrescreve config/paper_accounts.json)
 .venv/bin/trader run                      # um ciclo do agente (modo do .env)
 ```
@@ -52,6 +53,7 @@ cp .env.example .env                                         # config (paper por
 | `broker.py` | `PaperBroker` (simulado, estado em `state/`) e `ExchangeBroker` (ccxt, testnet/live, stop `STOP_LOSS_LIMIT` na exchange) |
 | `agent.py` | `SwingAgent.run_once()`: um ciclo por candle fechado, idempotente por barra. Se ficou dias sem rodar, sai por sinal de saída em qualquer barra perdida, mas só entra pelo último candle |
 | `journal.py` | Toda decisão em `state/journal.jsonl` |
+| `regimes.py` | Rótulo de fase do mercado pelo retorno passado do BTC e estatísticas por fase |
 | `accounts.py` | Contas de paper congeladas (`config/paper_accounts.json`, versionado): estratégia, timeframe, parâmetros e risco de cada uma; estado em `state/accounts/<nome>/` |
 | `cli.py` | Subcomandos `fetch`, `backtest`, `compare`, `walkforward`, `run` |
 

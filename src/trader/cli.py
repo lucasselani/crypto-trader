@@ -1,5 +1,5 @@
 """CLI: `trader fetch | backtest | compare | portfolio | walkforward | battery | freeze | run |
-status | forward`."""
+status | forward | regimes`."""
 
 from __future__ import annotations
 
@@ -240,6 +240,52 @@ def cmd_forward(s: Settings, a: argparse.Namespace) -> None:
     print(pd.DataFrame(rows).fillna("sem dados ainda").to_string(index=False))
 
 
+def load_equity_curves(s: Settings) -> pd.DataFrame:
+    """Curvas fora da amostra salvas pelas baterias (a mais recente vence em nomes repetidos)."""
+    files = sorted((s.data_dir / "results").glob("equity_*.csv"))
+    if not files:
+        sys.exit("Nenhuma curva salva: rode `trader battery` antes")
+    c = pd.concat([pd.read_csv(f, index_col="time", parse_dates=["time"]) for f in files],
+                  axis=1, sort=True)
+    return c.loc[:, ~c.columns.duplicated(keep="last")]
+
+
+def cmd_regimes(s: Settings, a: argparse.Namespace) -> None:
+    from trader.regimes import REGIMES, label_regimes, regime_mix, regime_stats
+
+    bench = _candles(s, a.benchmark, "2018-01-01", refresh=not a.offline, timeframe="1d")["close"]
+    labels = label_regimes(bench, a.window, a.bull, a.bear)
+    split = pd.Timestamp(a.split, tz="UTC")
+    curves = load_equity_curves(s)
+    cols = [c for c in curves if c.endswith(a.suffix)]
+    start = max(curves[c].first_valid_index() for c in cols)
+
+    mix = pd.DataFrame({
+        f"antes de {split.date()}": regime_mix(labels, start, split - pd.Timedelta(days=1)),
+        f"desde {split.date()}": regime_mix(labels, split),
+    }).T
+    print(f"Fases do mercado ({a.benchmark}, variação de {a.window} dias: alta ≥ {a.bull:+.0%}, "
+          f"baixa ≤ {a.bear:+.0%}) — fração dos dias:\n")
+    print(mix.map(lambda v: f"{v:.0%}").to_string())
+
+    named = {c.removesuffix(a.suffix): curves[c] for c in cols}
+    named[f"HOLD {a.benchmark}"] = bench
+    rows = []
+    for name, eq in named.items():
+        eq = eq.loc[start:].dropna()
+        before = regime_stats(eq.loc[:split], labels)
+        after = regime_stats(eq.loc[split:], labels)
+        row = {"": name}
+        for r in REGIMES:
+            row[f"{r} antes"] = before.loc[r, "mensal"]
+            row[f"{r} depois"] = after.loc[r, "mensal"]
+        rows.append(row)
+    df = pd.DataFrame(rows).set_index("")
+    print(f"\nMédia mensal dentro de cada fase, antes vs. desde {split.date()} "
+          f"(curvas fora da amostra desde {start.date()}):\n")
+    print(df.map(lambda v: f"{v:+.1%}" if pd.notna(v) else "-").to_string())
+
+
 def cmd_run(s: Settings, a: argparse.Namespace) -> None:
     from trader.agent import SwingAgent
     from trader.broker import ExchangeBroker, PaperBroker
@@ -354,6 +400,15 @@ def main(argv: list[str] | None = None) -> None:
     stt = sub.add_parser("status", help="patrimônio atual de cada conta de paper")
     stt.add_argument("--accounts", default="config/paper_accounts.json")
 
+    rg = sub.add_parser("regimes", help="resultado das estratégias por fase do mercado")
+    rg.add_argument("--benchmark", default="BTC/USDT")
+    rg.add_argument("--window", type=int, default=90, help="dias da variação que define a fase")
+    rg.add_argument("--bull", type=float, default=0.20)
+    rg.add_argument("--bear", type=float, default=-0.20)
+    rg.add_argument("--split", default="2024-01-01", help="data que separa antes/depois")
+    rg.add_argument("--suffix", default="_r0.01_p3", help="quais curvas da bateria usar")
+    rg.add_argument("--offline", action="store_true")
+
     fw = sub.add_parser("forward", help="simula cada conta congelada desde a data de congelamento")
     fw.add_argument("--accounts", default="config/paper_accounts.json")
     fw.add_argument("--offline", action="store_true")
@@ -364,7 +419,8 @@ def main(argv: list[str] | None = None) -> None:
         s.timeframe = a.timeframe
     {"fetch": cmd_fetch, "backtest": cmd_backtest, "compare": cmd_compare, "portfolio": cmd_portfolio,
      "walkforward": cmd_walkforward, "battery": cmd_battery, "run": cmd_run,
-     "freeze": cmd_freeze, "status": cmd_status, "forward": cmd_forward}[a.cmd](s, a)
+     "freeze": cmd_freeze, "status": cmd_status, "forward": cmd_forward,
+     "regimes": cmd_regimes}[a.cmd](s, a)
 
 
 if __name__ == "__main__":
