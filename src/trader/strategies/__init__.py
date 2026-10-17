@@ -1,4 +1,5 @@
 from trader.strategies.base import Strategy
+from trader.strategies.rotation import High52wRotation, MomentumRotation, RotationStrategy
 from trader.strategies.trend import (
     DonchianBreakout,
     EmaCross,
@@ -10,7 +11,8 @@ from trader.strategies.trend import (
 
 STRATEGIES: dict[str, type[Strategy]] = {
     cls.name: cls
-    for cls in (EmaCross, DonchianBreakout, RsiPullback, SmaTrend, RocMomentum, KeltnerBreakout)
+    for cls in (EmaCross, DonchianBreakout, RsiPullback, SmaTrend, RocMomentum, KeltnerBreakout,
+                MomentumRotation, High52wRotation)
 }
 
 
@@ -22,4 +24,8 @@ def get_strategy(name: str, **params) -> Strategy:
     return cls(**params)
 
 
-__all__ = ["STRATEGIES", "DonchianBreakout", "EmaCross", "RsiPullback", "Strategy", "get_strategy"]
+__all__ = [
+    "STRATEGIES", "DonchianBreakout", "EmaCross", "High52wRotation", "KeltnerBreakout",
+    "MomentumRotation", "RocMomentum", "RotationStrategy", "RsiPullback", "SmaTrend", "Strategy",
+    "get_strategy",
+]

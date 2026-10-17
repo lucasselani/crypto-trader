@@ -47,6 +47,7 @@ cp .env.example .env                                         # config (paper por
 | `data.py` | `ccxt`: candles paginados, cache CSV incremental em `data/`. Dados sempre da exchange real, mesmo em testnet |
 | `indicators.py` | SMA, EMA, RSI e ATR (Wilder), Donchian |
 | `strategies/` | `Strategy` (dataclass frozen): `signals(df) -> (entry, exit)`, `warmup`, `grid` para walk-forward. Registro em `strategies/__init__.py` |
+| `strategies/rotation.py` | `RotationStrategy`: ranqueia ativos por `score` e fica com os `top_k` (`run_rotation` em `backtest.py`, despachado pelo `run_portfolio`). O agente ao vivo **ainda não** opera rotação: não colocar em contas de paper |
 | `risk.py` | `RiskConfig`, `position_size` (risco fixo por trade), `drawdown` |
 | `backtest.py` | `run_portfolio`: motor barra a barra multiativo com caixa compartilhado, limite de posições e kill switch, igual ao agente. `run_backtest` é o caso de um ativo sem kill switch. `CostModel` e métricas (CAGR, drawdown, Sharpe, Calmar, profit factor, exposição, buy & hold) |
 | `walkforward.py` | Otimiza na janela de treino, testa na seguinte, encadeia o OOS; aceita ativo ou carteira. `Criteria`/`evaluate`: régua de aprovação |

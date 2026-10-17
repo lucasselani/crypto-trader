@@ -69,6 +69,7 @@ Medidos só fora da amostra (`Criteria` em `walkforward.py`):
 | Profit factor | 1,3 | Soma dos ganhos ÷ soma das perdas. 1,3 = R$ 1,30 ganho para cada R$ 1,00 perdido |
 | Operações | 30 | Com menos, o resultado pode ser sorte |
 | Janelas positivas | 50% | Das janelas de 6 meses em que operou, pelo menos metade terminou no lucro (não depende de um ano mágico) |
+| Pior queda | −30% | Queda máxima do patrimônio. Adicionado em 17/10/2026: a rotação com 100% de exposição passava nos outros critérios com −71% |
 
 ### Viés de sobrevivência
 

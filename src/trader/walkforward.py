@@ -60,6 +60,7 @@ class Criteria:
     min_profit_factor: float = 1.3  # ganho das vencedoras / perda das perdedoras
     min_trades: int = 30  # menos que isso é sorte demais para tirar conclusão
     min_positive_windows: float = 0.5  # fração das janelas com operações que terminaram no lucro
+    max_drawdown: float = 0.30  # pior queda aceitável (a rotação 100% passou nos outros com −71%)
 
 
 def evaluate(result: WalkForwardResult, criteria: Criteria | None = None) -> dict[str, bool]:
@@ -72,6 +73,7 @@ def evaluate(result: WalkForwardResult, criteria: Criteria | None = None) -> dic
         "profit_factor": m.get("profit_factor", 0.0) >= c.min_profit_factor,
         "trades": m.get("trades", 0) >= c.min_trades,
         "positive_windows": bool(traded) and positive / len(traded) >= c.min_positive_windows,
+        "drawdown": m.get("max_drawdown", -1.0) >= -c.max_drawdown,
     }
     checks["approved"] = all(checks.values())
     return checks

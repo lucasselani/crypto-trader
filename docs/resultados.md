@@ -115,3 +115,27 @@ Leituras:
 - **Parte é a estratégia:** a donchian diária caiu de +3,8% para +0,4%/mês **nas fases de alta** (−90%), muito mais do que o enfraquecimento do mercado explica. Ela deixou de pegar as altas. As outras perderam entre 20% e 50% nas altas, compatível com o mercado.
 - **A mais robusta é a ema_cross 4h:** quase igual nas altas (+3,9% → +3,4%) e positiva em todas as fases nos dois períodos.
 - Em "baixa" o hold de BTC aparece positivo porque o rótulo usa os 90 dias passados: depois de uma queda forte, o BTC muitas vezes repica. As estratégias, por regra, quase não compram nessa fase.
+
+## 17/10/2026 – rotação por momentum (ideia do Vibe-Trading)
+
+Toda semana, ranqueia as 10 moedas e fica com as `top_k` mais fortes que estejam acima da média de regime; sem nenhuma elegível, fica em caixa. Duas notas: `momentum_rotation` (retorno dos últimos N dias, Carhart 1997) e `high52w_rotation` (proximidade da máxima de N dias, George & Hwang 2004). `exposure` = fração do patrimônio aplicada (o resto em caixa). Walk-forward no diário.
+
+| | Mês 2020–26 | Mês desde 2024 | Pior queda | Queda desde 2024 | Lateral desde 2024 |
+|---|---|---|---|---|---|
+| momentum_rotation 25% | +1,32% | +0,34% | −21% | −18% | −0,9% |
+| momentum_rotation 50% | +2,18% | +0,35% | −39% | −33% | −1,9% |
+| momentum_rotation 100% | +3,64% | −0,24% | −65% | −55% | −3,7% |
+| high52w_rotation 25% | +1,77% | +0,61% | −28% | −14% | −0,6% |
+| high52w_rotation 50% | +3,00% | +1,12% | −47% | −27% | −1,1% |
+| high52w_rotation 100% | +4,96% | +1,46% | −71% | −47% | −2,5% |
+| *ema_cross 4h (referência)* | +1,87% | +1,45% | −23% | −20% | +0,5% |
+| *keltner diário (referência)* | +1,34% | +0,64% | −14% | −13% | −0,3% |
+| hold BTC | +3,00% | +1,85% | −77% | −53% | −1,8% |
+
+Leituras:
+
+- Com 100% aplicado, a rotação rende muito (2021: +772% e +802%, pegando a alta das altcoins), mas cai quase como o hold (−65% no crash de maio/2021; −71% sangrando de 11/2021 a 10/2023).
+- **Com risco comparável (25%), não supera a ema_cross 4h**: rende menos no período todo e muito menos desde 2024.
+- **Não ajuda no mercado lateral**, ao contrário do que se esperava: perde nessa fase (−0,6% a −3,7%/mês), porque troca de moeda atrás de altas que não continuam.
+- A high52w é a melhor das duas; a 50% ficou parecida com o hold de BTC em ganho com uma queda menor (−47% vs −77%), mas ainda grande demais.
+- Decisão: não vira conta de paper por enquanto (o agente também não opera rotação ainda). Critério novo: **pior queda de no máximo −30%** (a high52w 100% passava nos outros critérios com −71%). Com ele, das variações de 17/10, saem também ema_cross 4h 2%/3 e 2%/5 e donchian diário 2%/5 e 1%/5 (quedas de −25% a −45%).

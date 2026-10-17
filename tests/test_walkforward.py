@@ -23,7 +23,8 @@ def test_walk_forward_portfolio_and_criteria(random_walk):
                        test_bars=200, grid={"entry_n": [20, 40]})
     assert len(res.windows) == 6
     checks = evaluate(res)
-    assert set(checks) == {"calmar", "profit_factor", "trades", "positive_windows", "approved"}
+    assert set(checks) == {"calmar", "profit_factor", "trades", "positive_windows", "drawdown",
+                           "approved"}
     assert checks["approved"] == all(v for k, v in checks.items() if k != "approved")
 
 
@@ -35,6 +36,9 @@ def test_criteria_thresholds():
     t = pd.Timestamp("2024-01-01", tz="UTC")
     win = Window(t, t, t, {}, {}, {"trades": 5, "total_return": 0.1})
     good = WalkForwardResult("x", [win], pd.Series(dtype=float),
-                             {"calmar": 1.5, "profit_factor": 2.0, "trades": 40})
+                             {"calmar": 1.5, "profit_factor": 2.0, "trades": 40,
+                              "max_drawdown": -0.2})
     assert evaluate(good)["approved"]
     assert not evaluate(good, Criteria(min_trades=50))["approved"]
+    good.metrics["max_drawdown"] = -0.5
+    assert not evaluate(good)["approved"]
