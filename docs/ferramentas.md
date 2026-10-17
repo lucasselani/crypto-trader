@@ -19,10 +19,18 @@ Levantamento de 16/10/2026, a partir de uma lista de posts do Instagram (lista c
 - Também tem node editor visual, ferramentas MCP e um "AI Quant Lab" (ML, descoberta de fatores, RL).
 - Ponto fraco: notícias do mercado brasileiro devem ser fracas, porque o foco é global. Licença AGPL: se distribuir uma versão modificada ou rodar como serviço para outros, precisa publicar o código.
 
-### Vibe-Trading — não verificado
-- https://github.com/HKUDS/Vibe-Trading
-- O README não carregou na consulta. Pelos tópicos do repositório: agente de IA, trading algorítmico, backtesting, MCP, multiagente, Python. A descrição da lista fala em agentes que "debatem" antes de operar.
-- Pendente: confirmar se busca notícias e quais mercados/exchanges suporta.
+### Vibe-Trading — usar como fonte de ideias, não como plataforma
+- https://github.com/HKUDS/Vibe-Trading (licença MIT). Código lido em 17/10/2026 (commit `596fcf3`, de 16/10/2026); nada foi executado.
+- **O que é:** um "workspace de pesquisa" movido a LLM. Você pergunta em linguagem natural e o agente gera o código da estratégia, roda o backtest e escreve o relatório. Tem times multiagente, interface web, integração com dezenas de chats, MCP e execução ao vivo via corretora (ex.: Robinhood), em que o **LLM toma as decisões** (as notas de versão falam em "sessões de decisão" com orçamento diário de uso do modelo).
+- **Tamanho:** ~2.900 arquivos, ~2.000 em Python, 155 MB, com várias atualizações por dia. Foco maior em ações (China, Hong Kong, EUA); cripto entra via OKX e ccxt.
+- **Por que não adotar como base:** contraria a regra principal do projeto (o LLM decidir a ordem); é grande e muda demais para depender dele; as estratégias são geradas na hora pelo LLM, não um conjunto fixo e testado.
+- **O que vale aproveitar (ideias, reimplementadas aqui):**
+  1. **Evidência por regime de mercado** (`strategy_discovery/evidence_harness.py`): separa o resultado da estratégia em períodos de alta, baixa e lateral, definidos pelo retorno acumulado do mercado. Responde se o resultado fraco desde 2024 é do mercado (lateral) ou da estratégia.
+  2. **Monitor de decadência** (`strategy_store/decay.py`): máquina de estados saudável → atenção → decadente → desligada, por Sharpe móvel com limites (1,0 / 0,5 / 0,0) e contagem de avisos seguidos. Bom para acompanhar as contas de paper.
+  3. **Fatores acadêmicos de momentum** (`factors/zoo/academic`): momentum de Carhart (retorno de 12 meses sem o último) e proximidade da máxima de 52 semanas (George & Hwang, 2004). São de **ranking entre ativos**: viram, para nós, uma estratégia de rotação (segurar as K moedas mais fortes). Precisa de suporte a ranking no motor.
+  4. **Taxa de funding dos perpétuos como termômetro** (skills `perp-funding-basis` e `crypto-derivatives`): funding muito positivo = mercado alavancado e eufórico. Para spot só comprado, serve como **filtro** (não comprar com o mercado superaquecido), sem operar derivativos. Os dados são públicos na Binance.
+- **O que não serve:** arbitragem de funding/base (exige derivativos e venda a descoberto), estratégias de opções, a maioria dos 478 "alphas" (feitos para ações, long-short), e o regime de correlação, que o próprio autor diz não servir para timing de compra e venda.
+- Skills técnicas (`technical-basic`, `volatility`, `seasonal`) são indicadores clássicos sem nada além do que já temos.
 
 ## Outras ferramentas da lista úteis para o pipeline
 
