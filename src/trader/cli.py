@@ -6,12 +6,14 @@ import argparse
 import json
 import math
 import sys
+from dataclasses import replace
 
 import pandas as pd
 
 from trader.backtest import run_backtest, run_portfolio
 from trader.config import Settings
 from trader.data import load_candles, make_exchange
+from trader.risk import RiskConfig
 from trader.strategies import STRATEGIES, get_strategy
 from trader.walkforward import evaluate, walk_forward
 
@@ -42,11 +44,12 @@ def bars_per_day(timeframe: str) -> float:
     return 86400 / make_exchange("binance").parse_timeframe(timeframe)
 
 
-def _walk(s: Settings, data: dict, strategy: str, timeframe: str, a: argparse.Namespace):
+def _walk(s: Settings, data: dict, strategy: str, timeframe: str, a: argparse.Namespace,
+          risk: RiskConfig | None = None):
     bpd = bars_per_day(timeframe)
     return walk_forward(data, get_strategy(strategy), train_bars=int(a.train_days * bpd),
                         test_bars=int(a.test_days * bpd), objective=a.objective,
-                        costs=s.costs, risk=s.risk)
+                        costs=s.costs, risk=risk or s.risk)
 
 
 def cmd_fetch(s: Settings, a: argparse.Namespace) -> None:
@@ -113,6 +116,7 @@ def cmd_battery(s: Settings, a: argparse.Namespace) -> None:
 
     symbols = a.symbols or s.universe
     rows = []
+    curves: dict[str, pd.Series] = {}
     for tf in a.timeframes:
         data = {}
         for sym in symbols:
@@ -121,20 +125,28 @@ def cmd_battery(s: Settings, a: argparse.Namespace) -> None:
             except (ccxt.BaseError, FileNotFoundError) as e:  # sem dados nessa exchange/timeframe
                 print(f"  pulando {sym} {tf}: {e}", file=sys.stderr)
         for name in a.strategies or list(STRATEGIES):
-            print(f"... {tf} {name}", file=sys.stderr, flush=True)
-            res = _walk(s, data, name, tf, a)
-            checks = evaluate(res)
-            m = res.metrics
-            rows.append({
-                "timeframe": tf, "strategy": name,
-                **{k: m.get(k) for k in ("total_return", "cagr", "max_drawdown", "calmar",
-                                         "sharpe", "profit_factor", "trades", "buy_hold")},
-                **{f"ok_{k}": v for k, v in checks.items()},
-            })
+            for risk_pct in a.risk or [s.risk.risk_per_trade]:
+                for max_pos in a.max_positions or [s.risk.max_open_positions]:
+                    risk = replace(s.risk, risk_per_trade=risk_pct, max_open_positions=max_pos)
+                    label = f"{tf}_{name}_r{risk_pct:g}_p{max_pos}"
+                    print(f"... {label}", file=sys.stderr, flush=True)
+                    res = _walk(s, data, name, tf, a, risk)
+                    curves[label] = res.equity
+                    checks = evaluate(res)
+                    m = res.metrics
+                    rows.append({
+                        "timeframe": tf, "strategy": name, "risk": risk_pct, "max_pos": max_pos,
+                        **{k: m.get(k) for k in ("total_return", "cagr", "max_drawdown", "calmar",
+                                                 "sharpe", "profit_factor", "trades", "buy_hold")},
+                        **{f"ok_{k}": v for k, v in checks.items()},
+                    })
     df = pd.DataFrame(rows)
-    out = s.data_dir / "results" / f"battery_{pd.Timestamp.now(tz='UTC'):%Y%m%d_%H%M%S}.csv"
+    stamp = f"{pd.Timestamp.now(tz='UTC'):%Y%m%d_%H%M%S}"
+    out = s.data_dir / "results" / f"battery_{stamp}.csv"
     out.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(out, index=False)
+    # curvas de patrimônio fora da amostra (base 1.0), para combinar estratégias depois
+    pd.concat(curves, axis=1).to_csv(out.with_name(f"equity_{stamp}.csv"), index_label="time")
     show = df.copy()
     for col in ("total_return", "cagr", "max_drawdown", "buy_hold"):
         show[col] = show[col].map(lambda v: f"{v:.1%}" if pd.notna(v) else "")
@@ -221,6 +233,8 @@ def main(argv: list[str] | None = None) -> None:
     bt = sub.add_parser("battery", help="walk-forward de todas as estratégias × timeframes")
     bt.add_argument("--timeframes", nargs="*", default=["1d", "4h"])
     bt.add_argument("--strategies", nargs="*", choices=list(STRATEGIES))
+    bt.add_argument("--risk", nargs="*", type=float, help="risco por operação, ex.: 0.01 0.02")
+    bt.add_argument("--max-positions", nargs="*", type=int, help="ex.: 3 5")
     wf_args(bt)
 
     r = sub.add_parser("run", help="executa o agente uma vez (paper/testnet/live conforme .env)")

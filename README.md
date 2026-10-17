@@ -30,6 +30,7 @@ cp .env.example .env            # modo paper por padrão, sem chave
 |---|---|
 | [docs/ferramentas.md](docs/ferramentas.md) | Avaliação das ferramentas de trading e das que ajudam no pipeline (dados, notícias, scraping, engenharia) |
 | [docs/exchange-e-api.md](docs/exchange-e-api.md) | Onde abrir conta, qual API usar, testnet e chaves |
+| [docs/resultados.md](docs/resultados.md) | Resultados das baterias de simulação e decisões tomadas |
 | [docs/agente-swing.md](docs/agente-swing.md) | Como o agente decide comprar e vender, risco e roteiro de validação |
 | [docs/arquitetura.md](docs/arquitetura.md) | Arquitetura proposta: coleta → filtro → estratégia → backtest → simulação → execução |
 | [docs/filtro-noticias.md](docs/filtro-noticias.md) | Como montar a triagem de notícias e a watchlist pré-pregão |

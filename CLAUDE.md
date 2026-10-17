@@ -27,6 +27,7 @@ cp .env.example .env                                         # config (paper por
 .venv/bin/trader backtest --strategy donchian --symbol BTC/USDT --trades --param entry_n=40
 .venv/bin/trader walkforward --strategy donchian --symbols BTC/USDT ETH/USDT --train-days 730 --test-days 180
 .venv/bin/trader battery --offline                                     # walk-forward estratégias × timeframes no universo; CSV em data/results/
+.venv/bin/trader battery --timeframes 1d --strategies donchian --risk 0.01 0.02 --max-positions 3 5   # variações de risco
 .venv/bin/trader run --dry-run            # decisões do agente sem executar
 .venv/bin/trader run                      # um ciclo do agente (modo do .env)
 ```
@@ -70,4 +71,4 @@ Timer do systemd do usuário em `deploy/systemd/` (instalado em `~/.config/syste
 
 Pré-requisitos prontos: dados, 3 estratégias de exemplo, backtest de ativo e de carteira com custos, walk-forward de ativo e de carteira, bateria de simulações com critérios, paper agendado, execução na testnet validada em 16/10/2026 (compra, stop na exchange, mover stop, cancelar, venda), diário. Ainda **não** existe: filtro de notícias/LLM, alertas, interface, controle de imposto. Imposto e exchange nacional vs. global ficaram para depois, por decisão do usuário.
 
-Resultado da bateria de 16/10/2026 (walk-forward, 10 moedas, até 3 posições, risco de 1%): aprovadas `donchian` no diário (CAGR 16,6%, queda máxima −12%, Calmar 1,38) e `ema_cross` no 4h (CAGR 24,9%, queda −23,5%, Calmar 1,06). `rsi_pullback` reprovou nos dois timeframes. O paper roda `donchian` diário nas 10 moedas. Ver `docs/agente-swing.md`.
+Resultado da bateria de 16/10/2026 (walk-forward, 10 moedas, até 3 posições, risco de 1%): aprovadas `donchian` no diário (CAGR 16,6%, queda máxima −12%, Calmar 1,38) e `ema_cross` no 4h (CAGR 24,9%, queda −23,5%, Calmar 1,06). `rsi_pullback` reprovou nos dois timeframes. O paper roda `donchian` diário nas 10 moedas. Histórico de baterias e decisões em `docs/resultados.md` (registrar lá cada bateria nova). Ver `docs/agente-swing.md`.
