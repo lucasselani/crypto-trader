@@ -39,3 +39,22 @@ Leituras:
 - Decisão atual: paper segue com donchian diária, 1%, 3 posições (funciona com o PC desligado à noite). A combinação com 4h fica para quando houver um servidor ligado 24h.
 
 Como reproduzir: `trader battery --timeframes 1d --strategies donchian --risk 0.01 0.02 --max-positions 3 5` (idem para `4h ema_cross`); as curvas ficam em `data/results/equity_*.csv`.
+
+## 17/10/2026 – média mensal vs. hold (01/2020 a 10/2026, 82 meses)
+
+Média mensal composta (a taxa fixa por mês que leva ao mesmo resultado final), em USDT, antes de imposto. Risco de 1% e 3 posições, salvo indicação.
+
+| | Média/mês | Meses no positivo | Pior mês | Pior queda | R$ 10 mil viram |
+|---|---|---|---|---|---|
+| donchian diário (1%) | +1,28% | 43% | −4,7% | −12% | 28.442 |
+| donchian diário (2%) | +2,33% | 43% | −9,1% | −23% | 66.303 |
+| ema_cross diário | +0,62% | 35% | −2,8% | −11% | 16.660 |
+| rsi_pullback diário | +0,02% | 26% | −3,6% | −5% | 10.185 |
+| donchian 4h | +1,80% | 38% | −5,0% | −31% | 43.271 |
+| ema_cross 4h | +1,86% | 54% | −4,6% | −24% | 45.308 |
+| rsi_pullback 4h | −0,25% | 29% | −5,4% | −35% | 8.131 |
+| metade donchian diário + ema_cross 4h | +1,60% | 55% | −3,6% | −16% | 36.875 |
+| hold só BTC | +2,98% | 56% | −37,3% | −77% | 110.980 |
+| hold 10 moedas | +3,56% | 55% | −33,4% | −85% | 175.818 |
+
+"Meses no positivo" baixo nas estratégias diárias é porque muitos meses ficam em caixa (0%). Desde 2024 a donchian diária sozinha ficou perto de 0%/mês; a combinação, perto de 0,8%/mês; o hold de BTC, perto de 2%/mês.
